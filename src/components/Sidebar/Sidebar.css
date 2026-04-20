@@ -1,0 +1,148 @@
+.kata-sidebar {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--color-border, rgba(255, 255, 255, 0.08));
+  background: var(--color-surface, rgba(20, 22, 28, 0.6));
+  min-width: 0;
+}
+
+.kata-sidebar-header {
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--color-border, rgba(255, 255, 255, 0.06));
+}
+
+.kata-logo {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: var(--color-text, #e6e6e6);
+  text-transform: lowercase;
+}
+
+.kata-sidebar-nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.kata-course {
+  display: flex;
+  flex-direction: column;
+}
+
+.kata-course-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: transparent;
+  border: 0;
+  color: var(--color-text, #e6e6e6);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1px;
+  text-align: left;
+  cursor: pointer;
+  text-transform: none;
+}
+
+.kata-course-title:hover {
+  background: var(--color-surface-hover, rgba(255, 255, 255, 0.04));
+}
+
+.kata-course-title.active {
+  color: var(--color-accent, #e6e6e6);
+}
+
+.kata-course-caret {
+  font-size: 9px;
+  opacity: 0.55;
+  width: 10px;
+}
+
+.kata-chapter {
+  padding: 2px 0 6px;
+}
+
+.kata-chapter-title {
+  padding: 4px 16px 2px 30px;
+  color: var(--color-text-muted, rgba(230, 230, 230, 0.45));
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.kata-lesson-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px 6px 30px;
+  width: 100%;
+  background: transparent;
+  border: 0;
+  color: var(--color-text, rgba(230, 230, 230, 0.82));
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.kata-lesson-item:hover {
+  background: var(--color-surface-hover, rgba(255, 255, 255, 0.04));
+  color: var(--color-text, #e6e6e6);
+}
+
+.kata-lesson-item.active {
+  background: var(--color-surface-active, rgba(255, 255, 255, 0.07));
+  color: var(--color-text, #ffffff);
+}
+
+.kata-lesson-kind {
+  font-size: 10px;
+  opacity: 0.6;
+  width: 12px;
+  display: inline-block;
+}
+
+.kata-lesson-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kata-sidebar-browse {
+  margin: 10px 14px;
+  padding: 8px 10px;
+  background: transparent;
+  border: 1px dashed var(--color-border, rgba(255, 255, 255, 0.14));
+  border-radius: 6px;
+  color: var(--color-text-muted, rgba(230, 230, 230, 0.55));
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.kata-sidebar-browse:hover {
+  background: var(--color-surface-hover, rgba(255, 255, 255, 0.04));
+  color: var(--color-text, #e6e6e6);
+}
+
+.kata-sidebar-footer {
+  padding: 10px 14px;
+  border-top: 1px solid var(--color-border, rgba(255, 255, 255, 0.06));
+}
+
+.kata-sidebar-settings {
+  width: 100%;
+  padding: 6px;
+  background: transparent;
+  border: 0;
+  color: var(--color-text-muted, rgba(230, 230, 230, 0.55));
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.kata-sidebar-settings:hover {
+  color: var(--color-text, #e6e6e6);
+}
