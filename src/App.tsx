@@ -6,7 +6,7 @@ import TopBar from "./components/TopBar/TopBar";
 import LessonReader from "./components/Lesson/LessonReader";
 import EditorPane from "./components/Editor/EditorPane";
 import OutputPane from "./components/Output/OutputPane";
-import { runCode, type RunResult } from "./runtimes";
+import { runCode, isPassing, type RunResult } from "./runtimes";
 import "./App.css";
 
 interface OpenCourse {
@@ -128,11 +128,12 @@ function LessonView({
     setRunning(true);
     setResult(null);
     try {
-      const r = await runCode(lesson.language, code);
+      // Lesson has tests when it's an exercise/mixed kind — pass them so the
+      // runtime evaluates them against the user's module.exports.
+      const tests = "tests" in lesson ? lesson.tests : undefined;
+      const r = await runCode(lesson.language, code, tests);
       setResult(r);
-      // Temporary completion: ran without throwing. Real pass/fail via tests
-      // lands in Step 6.
-      if (!r.error) onComplete();
+      if (isPassing(r)) onComplete();
     } finally {
       setRunning(false);
     }

@@ -51,16 +51,29 @@ Implement \`add\` so that \`add(2, 3)\` returns \`5\`.`,
 }
 
 console.log('add(2, 3) =', add(2, 3));
+
+module.exports = { add };
 `,
             solution: `function add(a, b) {
   return a + b;
 }
 
 console.log('add(2, 3) =', add(2, 3));
+
+module.exports = { add };
 `,
             tests: `const { add } = require("./user");
-test("adds two numbers", () => {
+
+test("adds two positive numbers", () => {
   expect(add(2, 3)).toBe(5);
+});
+
+test("adds with a negative", () => {
+  expect(add(-1, 10)).toBe(9);
+});
+
+test("returns a number, not a string", () => {
+  expect(typeof add(1, 2)).toBe("number");
 });
 `,
           },

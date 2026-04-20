@@ -1,4 +1,4 @@
-import type { RunResult, LogLine } from "./types";
+import type { RunResult, LogLine, TestResult } from "./types";
 
 /// In-browser JavaScript / TypeScript runtime.
 ///
@@ -7,29 +7,27 @@ import type { RunResult, LogLine } from "./types";
 /// Console methods are proxied so `console.log`, `info`, `warn`, and `error`
 /// all surface in the OutputPane instead of the DevTools console.
 ///
-/// V1 supports plain JavaScript. TypeScript is accepted but isn't actually
-/// type-stripped — we rely on Monaco to flag errors in the editor, and at
-/// runtime we treat TS as JS (types are erased via regex for very simple
-/// cases; a full transpile pass would need sucrase/esbuild and is overkill
-/// for V1 exercises that don't use decorators/enums).
+/// When `testCode` is supplied, the worker runs the user code first, captures
+/// its `module.exports` into a `userModule`, then injects a tiny Jest-like
+/// harness (`test`, `expect`, `require('./user')`) and runs the test file.
 
 const TIMEOUT_MS = 5000;
 
-export async function runJavaScript(code: string): Promise<RunResult> {
-  return runInWorker(code, /* stripTypes */ false);
+export async function runJavaScript(code: string, testCode?: string): Promise<RunResult> {
+  return runInWorker(code, testCode);
 }
 
-export async function runTypeScript(code: string): Promise<RunResult> {
-  return runInWorker(stripTypeAnnotations(code), /* stripTypes */ true);
+export async function runTypeScript(code: string, testCode?: string): Promise<RunResult> {
+  return runInWorker(stripTypeAnnotations(code), testCode ? stripTypeAnnotations(testCode) : undefined);
 }
 
-function runInWorker(code: string, _isTs: boolean): Promise<RunResult> {
+function runInWorker(code: string, testCode: string | undefined): Promise<RunResult> {
   const workerSource = `
     self.onmessage = async (e) => {
       const logs = [];
+      const tests = [];
       const makeLogger = (level) => (...args) => {
-        const text = args.map(formatArg).join(' ');
-        logs.push({ level, text });
+        logs.push({ level, text: args.map(formatArg).join(' ') });
       };
       function formatArg(v) {
         if (v === null) return 'null';
@@ -49,33 +47,133 @@ function runInWorker(code: string, _isTs: boolean): Promise<RunResult> {
         trace: makeLogger('log'),
       };
 
-      // Provide a tiny CommonJS shim so starter code like
-      //   module.exports = { add };
-      // doesn't blow up at runtime.
-      const module = { exports: {} };
-      const exports = module.exports;
+      // CommonJS shim — captures the user's exports so the test file can
+      // \`require('./user')\` below.
+      const userModule = { exports: {} };
+      const userExports = userModule.exports;
 
-      const start = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+      const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+      const start = performanceNow();
+
       try {
-        // AsyncFunction so top-level await works inside exercises.
-        const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-        const fn = new AsyncFunction('module', 'exports', 'console', e.data.code);
-        const result = await fn(module, exports, self.console);
-
-        const end = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-        self.postMessage({ logs, durationMs: end - start });
-
-        // Expose the last expression / module.exports in case the test harness
-        // (Step 6) wants them. Leaves the worker running briefly for any
-        // follow-up invocation; main thread terminates either way.
-        void result;
+        const userFn = new AsyncFunction('module', 'exports', 'console', e.data.code);
+        await userFn(userModule, userExports, self.console);
       } catch (err) {
-        const end = (typeof performance !== 'undefined' ? performance.now() : Date.now());
         self.postMessage({
           logs,
-          error: (err && (err.stack || err.message)) || String(err),
-          durationMs: end - start,
+          error: formatError(err),
+          durationMs: performanceNow() - start,
         });
+        return;
+      }
+
+      // ---- Test phase (optional) ----
+      if (e.data.testCode) {
+        const testHarness = makeTestHarness(tests, userModule);
+        try {
+          const testFn = new AsyncFunction(
+            'test', 'it', 'describe', 'expect', 'require', 'console',
+            e.data.testCode
+          );
+          await testFn(
+            testHarness.test,
+            testHarness.test,       // alias 'it' → 'test'
+            testHarness.describe,
+            testHarness.expect,
+            testHarness.require,
+            self.console
+          );
+        } catch (err) {
+          // A thrown error in the test file itself (not a failing assertion)
+          self.postMessage({
+            logs,
+            tests,
+            error: 'test file error: ' + formatError(err),
+            durationMs: performanceNow() - start,
+          });
+          return;
+        }
+      }
+
+      self.postMessage({ logs, tests, durationMs: performanceNow() - start });
+
+      // ---- Helpers defined inside the worker source ----
+      function performanceNow() {
+        return (typeof performance !== 'undefined' ? performance.now() : Date.now());
+      }
+
+      function formatError(err) {
+        return (err && (err.stack || err.message)) || String(err);
+      }
+
+      function makeTestHarness(results, userModule) {
+        const expect = (actual) => ({
+          toBe(expected) {
+            if (actual !== expected) throw new Error('expected ' + fmt(expected) + ', got ' + fmt(actual));
+          },
+          toEqual(expected) {
+            if (JSON.stringify(actual) !== JSON.stringify(expected))
+              throw new Error('expected ' + fmt(expected) + ', got ' + fmt(actual));
+          },
+          toBeTruthy() {
+            if (!actual) throw new Error('expected truthy, got ' + fmt(actual));
+          },
+          toBeFalsy() {
+            if (actual) throw new Error('expected falsy, got ' + fmt(actual));
+          },
+          toBeGreaterThan(n) {
+            if (!(actual > n)) throw new Error('expected > ' + n + ', got ' + fmt(actual));
+          },
+          toBeLessThan(n) {
+            if (!(actual < n)) throw new Error('expected < ' + n + ', got ' + fmt(actual));
+          },
+          toContain(item) {
+            if (!actual || !actual.includes || !actual.includes(item))
+              throw new Error('expected ' + fmt(actual) + ' to contain ' + fmt(item));
+          },
+          toBeCloseTo(expected, digits = 2) {
+            const diff = Math.abs(actual - expected);
+            const tol = Math.pow(10, -digits) / 2;
+            if (diff > tol) throw new Error('expected ~' + expected + ', got ' + fmt(actual));
+          },
+          toBeNull() {
+            if (actual !== null) throw new Error('expected null, got ' + fmt(actual));
+          },
+          toBeUndefined() {
+            if (actual !== undefined) throw new Error('expected undefined, got ' + fmt(actual));
+          },
+          toThrow() {
+            let threw = false;
+            try { typeof actual === 'function' && actual(); }
+            catch (_) { threw = true; }
+            if (!threw) throw new Error('expected function to throw');
+          },
+        });
+
+        const test = async (name, fn) => {
+          try {
+            await fn();
+            results.push({ name, passed: true });
+          } catch (err) {
+            results.push({ name, passed: false, error: (err && err.message) || String(err) });
+          }
+        };
+
+        const describe = async (_name, fn) => { await fn(); };
+
+        const require = (path) => {
+          if (path === './user' || path === '../user' || path === 'user')
+            return userModule.exports;
+          throw new Error("require() only supports './user' in tests (got " + fmt(path) + ')');
+        };
+
+        function fmt(v) {
+          if (typeof v === 'string') return JSON.stringify(v);
+          if (typeof v === 'object') { try { return JSON.stringify(v); } catch { return String(v); } }
+          return String(v);
+        }
+
+        return { test, describe, expect, require };
       }
     };
   `;
@@ -93,6 +191,7 @@ function runInWorker(code: string, _isTs: boolean): Promise<RunResult> {
       cleanup();
       resolve({
         logs: [] as LogLine[],
+        tests: [] as TestResult[],
         error: `execution timed out after ${TIMEOUT_MS}ms`,
         durationMs: TIMEOUT_MS,
       });
@@ -113,7 +212,7 @@ function runInWorker(code: string, _isTs: boolean): Promise<RunResult> {
       });
     };
 
-    worker.postMessage({ code });
+    worker.postMessage({ code, testCode });
   });
 }
 
