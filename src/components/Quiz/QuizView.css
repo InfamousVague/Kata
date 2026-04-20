@@ -1,0 +1,200 @@
+.kata-quiz {
+  max-width: 720px;
+  margin: 24px auto;
+  padding: 0 40px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.kata-quiz-progress {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.kata-quiz-pip {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid var(--color-border-default);
+  background: transparent;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.kata-quiz-pip--correct {
+  background: #7cd97c;
+  border-color: #7cd97c;
+}
+
+.kata-quiz-pip--wrong {
+  background: #ef6f6f;
+  border-color: #ef6f6f;
+}
+
+.kata-quiz-progress-label {
+  margin-left: 8px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-tertiary);
+}
+
+.kata-quiz-card {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border-default);
+  border-radius: 10px;
+}
+
+.kata-quiz-card--correct {
+  border-color: rgba(124, 217, 124, 0.45);
+  background: rgba(124, 217, 124, 0.04);
+}
+
+.kata-quiz-card--wrong {
+  border-color: rgba(239, 111, 111, 0.45);
+  background: rgba(239, 111, 111, 0.04);
+}
+
+.kata-quiz-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.kata-quiz-q-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.kata-quiz-prompt {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text-primary);
+}
+
+.kata-quiz-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kata-quiz-option {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  padding: 9px 12px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-default);
+  border-radius: 7px;
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.kata-quiz-option:hover:not(:disabled) {
+  background: var(--color-bg-tertiary);
+}
+
+.kata-quiz-option:disabled {
+  cursor: default;
+}
+
+.kata-quiz-option--correct {
+  border-color: rgba(124, 217, 124, 0.6);
+  background: rgba(124, 217, 124, 0.08) !important;
+  color: var(--color-text-primary);
+}
+
+.kata-quiz-option--wrong {
+  border-color: rgba(239, 111, 111, 0.6);
+  background: rgba(239, 111, 111, 0.1) !important;
+}
+
+.kata-quiz-option-letter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-tertiary);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.kata-quiz-short {
+  display: flex;
+  gap: 8px;
+}
+
+.kata-quiz-short-input {
+  flex: 1;
+  padding: 8px 10px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-default);
+  border-radius: 6px;
+  color: var(--color-text-primary);
+  font-family: "SF Mono", ui-monospace, Menlo, monospace;
+  font-size: 13px;
+}
+
+.kata-quiz-short-input:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.kata-quiz-short-submit {
+  padding: 0 14px;
+  background: #ffffff;
+  color: #000000;
+  border: 0;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.kata-quiz-short-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.kata-quiz-explanation {
+  padding: 9px 12px;
+  background: var(--color-bg-tertiary);
+  border-radius: 6px;
+  color: var(--color-text-secondary);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.kata-quiz-done {
+  margin-top: 6px;
+  padding: 10px 14px;
+  background: rgba(124, 217, 124, 0.08);
+  border: 1px solid rgba(124, 217, 124, 0.35);
+  border-radius: 8px;
+  color: #7cd97c;
+  font-size: 13px;
+  font-weight: 500;
+}

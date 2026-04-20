@@ -2,7 +2,9 @@ import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { textToCourse } from "../../ingest/pdfParser";
-import type { LanguageId } from "../../data/types";
+import { runPipeline } from "../../ingest/pipeline";
+import CoursePreview from "./CoursePreview";
+import type { Course, LanguageId } from "../../data/types";
 import "./ImportDialog.css";
 
 interface Props {
@@ -10,13 +12,13 @@ interface Props {
   onImported: (courseId: string) => void;
 }
 
-/// In-app "Import PDF" wizard. Three steps:
-///   1. Pick a PDF via the native dialog.
-///   2. Fill in title / language / id.
-///   3. Click import — we shell out to pdftotext, parse the text, and save
-///      the course via the existing save_course Tauri command.
+/// Import wizard with four possible steps:
+///   1. "pick"    — file picker
+///   2. "meta"    — metadata + AI toggle
+///   3. "running" — progress label while the pipeline runs
+///   4. "preview" — full-screen review of the generated course before save
 export default function ImportDialog({ onDismiss, onImported }: Props) {
-  const [step, setStep] = useState<"pick" | "meta" | "running">("pick");
+  const [step, setStep] = useState<"pick" | "meta" | "running" | "preview">("pick");
   const [pdfPath, setPdfPath] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
@@ -24,6 +26,8 @@ export default function ImportDialog({ onDismiss, onImported }: Props) {
   const [language, setLanguage] = useState<LanguageId>("javascript");
   const [useAi, setUseAi] = useState(true);
   const [runningLabel, setRunningLabel] = useState("");
+  const [runningDetail, setRunningDetail] = useState("");
+  const [previewCourse, setPreviewCourse] = useState<Course | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function pickFile() {
@@ -31,9 +35,7 @@ export default function ImportDialog({ onDismiss, onImported }: Props) {
     try {
       const picked = await open({
         multiple: false,
-        filters: [
-          { name: "Books", extensions: ["pdf"] },
-        ],
+        filters: [{ name: "Books", extensions: ["pdf"] }],
       });
       if (typeof picked !== "string") return;
       setPdfPath(picked);
@@ -50,68 +52,72 @@ export default function ImportDialog({ onDismiss, onImported }: Props) {
     if (!pdfPath) return;
     setStep("running");
     setError(null);
+    setPreviewCourse(null);
     try {
-      setRunningLabel("Extracting text from PDF…");
-      const res = await invoke<{ text: string; error: string | null }>("extract_pdf_text", {
-        path: pdfPath,
-      });
-      if (res.error) throw new Error(res.error);
-
       const finalId = courseId || slug(title);
 
-      // Deterministic pass: splits chapters/sections, emits reading lessons.
-      let course = textToCourse(res.text, {
-        courseId: finalId,
-        title,
-        author: author || undefined,
-        language,
-      });
-
+      let course: Course;
       if (useAi) {
-        setRunningLabel(`Structuring with Claude (${course.chapters.length} chapters)…`);
-        course = await enhanceWithLLM(course, language, (msg) => setRunningLabel(msg));
+        // Full specialist-chain pipeline with caching + validation.
+        course = await runPipeline({
+          pdfPath,
+          bookId: finalId,
+          title,
+          author: author || undefined,
+          language,
+          onProgress: (stage, detail) => {
+            setRunningLabel(stage);
+            setRunningDetail(detail ?? "");
+          },
+        });
+      } else {
+        // Deterministic-only path: pdftotext → section splits → reading lessons.
+        setRunningLabel("Extracting text from PDF…");
+        const res = await invoke<{ text: string; error: string | null }>(
+          "extract_pdf_text",
+          { path: pdfPath },
+        );
+        if (res.error) throw new Error(res.error);
+        course = textToCourse(res.text, {
+          courseId: finalId,
+          title,
+          author: author || undefined,
+          language,
+        });
       }
 
-      setRunningLabel("Saving course…");
-      await invoke("save_course", { courseId: finalId, body: course });
-      onImported(finalId);
+      setPreviewCourse(course);
+      setStep("preview");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setStep("meta");
     }
   }
 
-  /// Replace the deterministic reading-only lessons in each chapter with
-  /// Claude-structured lessons (reading + exercise mix). Runs one API call
-  /// per chapter, keeping progress visible.
-  async function enhanceWithLLM(
-    course: { chapters: { id: string; title: string; lessons: { body?: string }[] }[] },
-    language: LanguageId,
-    onProgress: (msg: string) => void,
-  ) {
-    const enhanced = { ...course, chapters: [] as typeof course.chapters };
-    for (let i = 0; i < course.chapters.length; i++) {
-      const ch = course.chapters[i];
-      onProgress(`Structuring chapter ${i + 1}/${course.chapters.length}: ${ch.title}`);
-      const sectionText = ch.lessons.map((l) => l.body ?? "").filter(Boolean).join("\n\n");
-      if (!sectionText.trim()) {
-        enhanced.chapters.push(ch as any);
-        continue;
-      }
-      const raw = await invoke<string>("structure_with_llm", {
-        sectionTitle: ch.title,
-        sectionText,
-        language,
+  async function commitSave() {
+    if (!previewCourse) return;
+    try {
+      await invoke("save_course", {
+        courseId: previewCourse.id,
+        body: previewCourse,
       });
-      let lessons;
-      try {
-        lessons = JSON.parse(raw);
-      } catch (e) {
-        throw new Error(`LLM returned invalid JSON for ${ch.title}: ${e}`);
-      }
-      enhanced.chapters.push({ ...ch, lessons });
+      onImported(previewCourse.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     }
-    return enhanced as any;
+  }
+
+  if (step === "preview" && previewCourse) {
+    return (
+      <CoursePreview
+        course={previewCourse}
+        onSave={commitSave}
+        onDiscard={() => {
+          setPreviewCourse(null);
+          setStep("meta");
+        }}
+      />
+    );
   }
 
   return (
@@ -119,17 +125,16 @@ export default function ImportDialog({ onDismiss, onImported }: Props) {
       <div className="kata-import-panel" onClick={(e) => e.stopPropagation()}>
         <div className="kata-import-header">
           <span className="kata-import-title">Import course from PDF</span>
-          <button className="kata-import-close" onClick={onDismiss}>
-            ×
-          </button>
+          <button className="kata-import-close" onClick={onDismiss}>×</button>
         </div>
 
         <div className="kata-import-body">
           {step === "pick" && (
             <>
               <p className="kata-import-blurb">
-                Pick an O'Reilly-style PDF. We'll extract the text, split it by chapter +
-                section, and save it as a new course you can browse in the sidebar.
+                Pick a PDF. We'll extract the text, split by chapter + section, and —
+                if you've got an Anthropic key in Settings — use Claude to structure
+                it into a real Codecademy-style course with exercises and quizzes.
               </p>
               <button className="kata-import-primary" onClick={pickFile}>
                 Choose PDF…
@@ -143,35 +148,23 @@ export default function ImportDialog({ onDismiss, onImported }: Props) {
                 <code className="kata-import-path">{pdfPath}</code>
               </Field>
               <Field label="Title">
-                <input
-                  className="kata-import-input"
-                  value={title}
+                <input className="kata-import-input" value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. JavaScript: The Definitive Guide"
-                />
+                  placeholder="e.g. JavaScript: The Definitive Guide" />
               </Field>
               <Field label="Author">
-                <input
-                  className="kata-import-input"
-                  value={author}
+                <input className="kata-import-input" value={author}
                   onChange={(e) => setAuthor(e.target.value)}
-                  placeholder="optional"
-                />
+                  placeholder="optional" />
               </Field>
               <Field label="Course id">
-                <input
-                  className="kata-import-input"
-                  value={courseId}
+                <input className="kata-import-input" value={courseId}
                   onChange={(e) => setCourseId(e.target.value)}
-                  placeholder="short slug"
-                />
+                  placeholder="short slug" />
               </Field>
               <Field label="Primary language">
-                <select
-                  className="kata-import-input"
-                  value={language}
-                  onChange={(e) => setLanguage(e.target.value as LanguageId)}
-                >
+                <select className="kata-import-input" value={language}
+                  onChange={(e) => setLanguage(e.target.value as LanguageId)}>
                   <option value="javascript">JavaScript</option>
                   <option value="typescript">TypeScript</option>
                   <option value="python">Python</option>
@@ -181,39 +174,34 @@ export default function ImportDialog({ onDismiss, onImported }: Props) {
               </Field>
 
               <label className="kata-import-checkbox">
-                <input
-                  type="checkbox"
-                  checked={useAi}
-                  onChange={(e) => setUseAi(e.target.checked)}
-                />
+                <input type="checkbox" checked={useAi}
+                  onChange={(e) => setUseAi(e.target.checked)} />
                 <div>
-                  <div>Use Claude to structure into exercises</div>
+                  <div>Use Claude to structure into lessons</div>
                   <div className="kata-import-hint">
-                    Requires an Anthropic API key in Settings. Produces reading +
-                    exercise lessons with runnable tests. Off = reading-only splits.
+                    Requires an Anthropic key in Settings. Runs the full
+                    specialist-chain pipeline (clean code → outline → per-lesson →
+                    validate + retry 3x). Cached per-stage so re-runs are cheap.
+                    Off = reading-only section splits.
                   </div>
                 </div>
               </label>
 
               <div className="kata-import-actions">
-                <button className="kata-import-secondary" onClick={() => setStep("pick")}>
-                  Back
-                </button>
-                <button
-                  className="kata-import-primary"
-                  onClick={runImport}
-                  disabled={!title || !courseId}
-                >
-                  Import
-                </button>
+                <button className="kata-import-secondary" onClick={() => setStep("pick")}>Back</button>
+                <button className="kata-import-primary" onClick={runImport}
+                  disabled={!title || !courseId}>Import</button>
               </div>
             </>
           )}
 
           {step === "running" && (
-            <div className="kata-import-running">
+            <div className="kata-import-running-panel">
               <div className="kata-import-spinner" />
-              <span>{runningLabel || "Working…"}</span>
+              <div className="kata-import-running-body">
+                <div className="kata-import-running-stage">{runningLabel || "Working…"}</div>
+                {runningDetail && <div className="kata-import-running-detail">{runningDetail}</div>}
+              </div>
             </div>
           )}
 
@@ -239,10 +227,7 @@ function basename(path: string): string {
 }
 
 function slug(s: string): string {
-  const cleaned = s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+  const cleaned = s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   return cleaned || "course";
 }
 

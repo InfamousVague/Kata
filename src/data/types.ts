@@ -22,7 +22,7 @@ export interface Chapter {
   lessons: Lesson[];
 }
 
-export type Lesson = ReadingLesson | ExerciseLesson | MixedLesson;
+export type Lesson = ReadingLesson | ExerciseLesson | MixedLesson | QuizLesson;
 
 interface LessonBase {
   id: string;
@@ -58,6 +58,53 @@ export interface MixedLesson extends LessonBase {
   tests: string;
 }
 
+/**
+ * Checkpoint lesson — a small batch of questions the user must get right to
+ * complete the lesson. Mixes multiple-choice and short-answer so we can cover
+ * both "pick the right definition" and "fill in the identifier" cases without
+ * needing a full exercise.
+ */
+export interface QuizLesson extends LessonBase {
+  kind: "quiz";
+  questions: QuizQuestion[];
+}
+
+export type QuizQuestion = QuizMcq | QuizShort;
+
+export interface QuizMcq {
+  kind: "mcq";
+  prompt: string;
+  options: string[];
+  /** Index into `options` of the correct answer. */
+  correctIndex: number;
+  /** Optional context shown after an answer is committed. */
+  explanation?: string;
+}
+
+export interface QuizShort {
+  kind: "short";
+  prompt: string;
+  /**
+   * Accepted answers. Matching is case-insensitive and punctuation-stripped,
+   * so `"prototype"`, `"Prototype"`, and `"prototype."` all match.
+   */
+  accept: string[];
+  explanation?: string;
+}
+
 export function isExerciseKind(lesson: Lesson): lesson is ExerciseLesson | MixedLesson {
   return lesson.kind === "exercise" || lesson.kind === "mixed";
+}
+
+export function isQuiz(lesson: Lesson): lesson is QuizLesson {
+  return lesson.kind === "quiz";
+}
+
+/** Canonicalize a user or accepted-answer string for short-answer matching. */
+export function normalizeAnswer(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }

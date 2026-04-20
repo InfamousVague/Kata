@@ -9,6 +9,7 @@
 
 mod courses;
 mod ingest;
+mod ingest_cache;
 mod llm;
 mod progress_db;
 mod settings;
@@ -108,6 +109,13 @@ pub fn run() {
             settings::load_settings,
             settings::save_settings,
             llm::structure_with_llm,
+            llm::clean_code,
+            llm::outline_chapter,
+            llm::generate_lesson,
+            llm::retry_exercise,
+            ingest_cache::cache_read,
+            ingest_cache::cache_write,
+            ingest_cache::cache_clear,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

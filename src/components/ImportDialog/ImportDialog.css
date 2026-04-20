@@ -153,6 +153,36 @@
   padding: 16px 0;
 }
 
+.kata-import-running-panel {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 0;
+}
+
+.kata-import-running-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.kata-import-running-stage {
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.kata-import-running-detail {
+  color: var(--color-text-tertiary);
+  font-size: 11.5px;
+  font-family: "SF Mono", ui-monospace, Menlo, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .kata-import-spinner {
   width: 14px;
   height: 14px;

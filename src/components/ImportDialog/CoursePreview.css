@@ -1,0 +1,288 @@
+.kata-preview {
+  position: fixed;
+  inset: 0;
+  background: var(--color-bg-primary);
+  display: flex;
+  flex-direction: column;
+  z-index: 120;
+}
+
+.kata-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--color-border-default);
+  background: var(--color-bg-secondary);
+}
+
+.kata-preview-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.kata-preview-subtitle {
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--color-text-tertiary);
+}
+
+.kata-preview-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.kata-preview-primary {
+  padding: 8px 16px;
+  background: #ffffff;
+  color: #000000;
+  border: 0;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.kata-preview-secondary {
+  padding: 8px 14px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border-default);
+  border-radius: 7px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.kata-preview-secondary:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-tertiary);
+}
+
+.kata-preview-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.kata-preview-tree {
+  border-right: 1px solid var(--color-border-default);
+  background: var(--color-bg-secondary);
+  overflow-y: auto;
+  padding: 10px 0;
+}
+
+.kata-preview-chapter {
+  margin-bottom: 2px;
+}
+
+.kata-preview-chapter-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 14px;
+  background: transparent;
+  border: 0;
+  color: var(--color-text-primary);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.kata-preview-chapter-title:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.kata-preview-chapter-title.is-active {
+  background: var(--color-bg-tertiary);
+}
+
+.kata-preview-ch-index {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-tertiary);
+  font-size: 10px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.kata-preview-chapter-title.is-active .kata-preview-ch-index {
+  background: #ffffff;
+  color: #000000;
+}
+
+.kata-preview-lesson {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 14px 6px 34px;
+  background: transparent;
+  border: 0;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.kata-preview-lesson:hover,
+.kata-preview-lesson.is-active {
+  color: var(--color-text-primary);
+  background: var(--color-bg-tertiary);
+}
+
+.kata-preview-lesson-glyph {
+  font-size: 10px;
+  opacity: 0.7;
+  width: 12px;
+  display: inline-block;
+  text-align: center;
+}
+
+.kata-preview-pane {
+  overflow-y: auto;
+  background: var(--color-bg-primary);
+}
+
+.kata-preview-lesson-pane {
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+.kata-preview-lesson-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 40px 0;
+  color: var(--color-text-primary);
+}
+
+.kata-preview-kind-chip {
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-tertiary);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.kata-preview-lesson-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.kata-preview-code {
+  padding: 0 40px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.kata-preview-code-section h4 {
+  margin: 0 0 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--color-text-tertiary);
+}
+
+.kata-preview-code-section pre {
+  margin: 0;
+  padding: 12px 14px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-default);
+  border-radius: 6px;
+  font-family: "SF Mono", ui-monospace, Menlo, monospace;
+  font-size: 12px;
+  color: var(--color-text-primary);
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.kata-preview-quiz {
+  padding: 0 40px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.kata-preview-question {
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-default);
+  border-radius: 8px;
+}
+
+.kata-preview-q-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.kata-preview-q-prompt {
+  color: var(--color-text-primary);
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 6px;
+}
+
+.kata-preview-q-options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.kata-preview-q-options li {
+  padding: 4px 8px;
+  color: var(--color-text-secondary);
+  font-size: 12.5px;
+  border-radius: 4px;
+}
+
+.kata-preview-q-options li.is-correct {
+  color: #7cd97c;
+  background: rgba(124, 217, 124, 0.08);
+  font-weight: 500;
+}
+
+.kata-preview-q-short {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.kata-preview-q-explanation {
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--color-text-tertiary);
+  font-style: italic;
+}
+
+.kata-preview-empty {
+  padding: 60px 40px;
+  color: var(--color-text-tertiary);
+}

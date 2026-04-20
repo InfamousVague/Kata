@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Course, Lesson, isExerciseKind } from "./data/types";
+import { Course, Lesson, isExerciseKind, isQuiz } from "./data/types";
 import Sidebar from "./components/Sidebar/Sidebar";
 import TopBar from "./components/TopBar/TopBar";
 import LessonReader from "./components/Lesson/LessonReader";
@@ -7,6 +7,7 @@ import EditorPane from "./components/Editor/EditorPane";
 import OutputPane from "./components/Output/OutputPane";
 import ImportDialog from "./components/ImportDialog/ImportDialog";
 import SettingsDialog from "./components/SettingsDialog/SettingsDialog";
+import QuizView from "./components/Quiz/QuizView";
 import { runCode, isPassing, type RunResult } from "./runtimes";
 import { useProgress } from "./hooks/useProgress";
 import { useCourses } from "./hooks/useCourses";
@@ -152,8 +153,6 @@ function LessonView({
     setRunning(true);
     setResult(null);
     try {
-      // Lesson has tests when it's an exercise/mixed kind — pass them so the
-      // runtime evaluates them against the user's module.exports.
       const tests = "tests" in lesson ? lesson.tests : undefined;
       const r = await runCode(lesson.language, code, tests);
       setResult(r);
@@ -161,6 +160,20 @@ function LessonView({
     } finally {
       setRunning(false);
     }
+  }
+
+  // Quiz lessons are rendered inline under the lesson prose with no editor /
+  // output pane — the quiz widget handles its own answer flow. Column layout
+  // so reader and quiz stack vertically inside a single scroll container.
+  if (isQuiz(lesson)) {
+    return (
+      <div className="kata__lesson kata__lesson--column">
+        <div className="kata__lesson-scroll">
+          <LessonReader lesson={lesson} />
+          <QuizView lesson={lesson} onComplete={onComplete} />
+        </div>
+      </div>
+    );
   }
 
   return (

@@ -14,13 +14,13 @@ export interface IngestOptions {
   language: LanguageId;
 }
 
-interface RawChapter {
+export interface RawChapter {
   title: string;
   intro: string;
   sections: RawSection[];
 }
 
-interface RawSection {
+export interface RawSection {
   title: string;
   body: string;
 }
@@ -44,7 +44,7 @@ export function textToCourse(raw: string, opts: IngestOptions): Course {
 
 // ---- Chapter / section splitting -------------------------------------------
 
-function splitChapters(text: string): RawChapter[] {
+export function splitChapters(text: string): RawChapter[] {
   const lines = text.split("\n");
   const tocSections = parseTocSections(lines);
 

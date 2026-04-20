@@ -64,6 +64,23 @@ button {
   min-width: 0;
 }
 
+/* Quiz + reading-only long lessons: stack the reader and a scrollable body
+   vertically instead of the row/workbench layout exercises use. */
+.kata__lesson--column {
+  flex-direction: column;
+}
+
+.kata__lesson-scroll {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.kata__lesson-scroll .kata-reader {
+  overflow-y: visible;
+}
+
 /* Workbench = editor + console/output, stacked vertically on the right side. */
 .kata__workbench {
   display: flex;
