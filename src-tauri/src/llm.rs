@@ -202,6 +202,12 @@ Return ONLY the corrected JSON object. No preamble, no code fences."#;
 
 // ---- Shared helper ----------------------------------------------------------
 
+/// How many times to retry a single call on retriable statuses (429 rate limit,
+/// 529 overloaded, 5xx server errors). Exponential backoff with jitter between
+/// attempts. Most overload spikes clear within a minute, so 5 retries gives the
+/// pipeline up to ~2 minutes to recover without human intervention.
+const MAX_RETRIES: u32 = 5;
+
 async fn call_llm(
     settings: &State<'_, SettingsState>,
     system: &str,
@@ -222,46 +228,91 @@ async fn call_llm(
     };
 
     let client = reqwest::Client::new();
-    let resp = client
-        .post(ANTHROPIC_API)
-        .header("x-api-key", api_key)
-        .header("anthropic-version", ANTHROPIC_VERSION)
-        .header("content-type", "application/json")
-        .json(&body)
-        .send()
-        .await
-        .map_err(|e| format!("network error: {e}"))?;
 
-    if !resp.status().is_success() {
+    for attempt in 0..=MAX_RETRIES {
+        let resp = client
+            .post(ANTHROPIC_API)
+            .header("x-api-key", &api_key)
+            .header("anthropic-version", ANTHROPIC_VERSION)
+            .header("content-type", "application/json")
+            .json(&body)
+            .send()
+            .await;
+
+        let resp = match resp {
+            Ok(r) => r,
+            Err(e) => {
+                // Network-level failures (DNS, connection reset, timeout) are
+                // also worth retrying a few times before giving up.
+                if attempt < MAX_RETRIES {
+                    sleep_backoff(attempt).await;
+                    continue;
+                }
+                return Err(format!("network error: {e}"));
+            }
+        };
+
         let status = resp.status();
-        let text = resp.text().await.unwrap_or_default();
-        return Err(format!("Anthropic API {status}: {text}"));
-    }
+        if status.is_success() {
+            let parsed: AnthropicResponse = resp
+                .json()
+                .await
+                .map_err(|e| format!("bad response json: {e}"))?;
 
-    let parsed: AnthropicResponse = resp
-        .json()
-        .await
-        .map_err(|e| format!("bad response json: {e}"))?;
+            if parsed.stop_reason.as_deref() == Some("max_tokens") {
+                return Err(format!(
+                    "Claude hit the {MAX_TOKENS}-token output cap before finishing — \
+                     response was truncated. Raise MAX_TOKENS in llm.rs or split the \
+                     prompt into smaller chunks."
+                ));
+            }
 
-    if parsed.stop_reason.as_deref() == Some("max_tokens") {
-        // Bail early with a descriptive error. The frontend retry_exercise
-        // path would just re-submit the truncated text, so clearer to force
-        // the caller to raise max_tokens or split the prompt.
-        return Err(format!(
-            "Claude hit the {MAX_TOKENS}-token output cap before finishing — \
-             response was truncated. Raise MAX_TOKENS in llm.rs or split the \
-             prompt into smaller chunks."
+            let text: String = parsed
+                .content
+                .into_iter()
+                .filter_map(|b| b.text)
+                .collect::<Vec<_>>()
+                .join("");
+            return Ok(extract_body(&text));
+        }
+
+        // Retriable: 429 (rate limit), 529 (overloaded), 5xx. Non-retriable:
+        // 4xx auth/validation — those need human intervention.
+        let is_retriable = status.as_u16() == 429
+            || status.as_u16() == 529
+            || status.is_server_error();
+
+        if !is_retriable || attempt == MAX_RETRIES {
+            let text = resp.text().await.unwrap_or_default();
+            return Err(format!("Anthropic API {status}: {text}"));
+        }
+
+        tracing_like_eprintln(&format!(
+            "[llm] Anthropic {} (attempt {}/{}). Waiting before retry.",
+            status, attempt + 1, MAX_RETRIES + 1
         ));
+        sleep_backoff(attempt).await;
     }
 
-    let text: String = parsed
-        .content
-        .into_iter()
-        .filter_map(|b| b.text)
-        .collect::<Vec<_>>()
-        .join("");
+    // Loop should always return; this is unreachable but satisfies the
+    // compiler when it can't prove the loop exits.
+    Err("exhausted retries without a terminal result".to_string())
+}
 
-    Ok(extract_body(&text))
+/// Exponential backoff: 2^attempt seconds + up to 1s jitter. Capped at 30s.
+/// Attempt 0 → ~1s, 1 → ~2s, 2 → ~4s, 3 → ~8s, 4 → ~16s, 5 → ~30s (capped).
+async fn sleep_backoff(attempt: u32) {
+    use rand::Rng;
+    let base = (1u64 << attempt.min(5)) as u64; // cap exponent at 5 (32s)
+    let cap = base.min(30);
+    let jitter_ms = rand::thread_rng().gen_range(0..1000);
+    let total_ms = cap * 1000 + jitter_ms;
+    tokio::time::sleep(std::time::Duration::from_millis(total_ms)).await;
+}
+
+fn tracing_like_eprintln(msg: &str) {
+    // Cheap console log without pulling in tracing for one line.
+    eprintln!("{msg}");
 }
 
 /// Strip ```json or ``` fences and trailing whitespace from an LLM reply.
