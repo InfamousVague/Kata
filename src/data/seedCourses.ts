@@ -1,15 +1,21 @@
-import { Course } from "./types";
+import type { Course } from "./types";
 
-/// Hard-coded placeholder courses so the UI has something to render before we
-/// build the filesystem-backed course loader. Replace with real content once
-/// the ingest pipeline lands.
+// Vite resolves these JSON imports at build time. Keep new seed courses as
+// standalone files under `courses/` in the repo and re-export them here.
+// This gives us one source of truth: the JSON files that the ingest CLI
+// produces and that ship with the bundle.
+import jsDefinitiveGuide from "../../courses/js-definitive-guide/course.json";
 
+/// Courses the app falls back to when running outside Tauri (vite dev or
+/// tests) and also the set seeded into app_data_dir on first launch so the
+/// user has real content to click on.
 export const seedCourses: Course[] = [
+  // Inline JS First Steps (kept for quick smoke-tests of the runtime)
   {
     id: "js-first-steps",
     title: "JavaScript First Steps",
     author: "Kata Team",
-    description: "A gentle intro to JavaScript. Variables, functions, and a little bit of DOM.",
+    description: "A gentle intro to JavaScript. Variables, functions, a first runtime smoke test.",
     language: "javascript",
     chapters: [
       {
@@ -20,233 +26,23 @@ export const seedCourses: Course[] = [
             id: "hello",
             kind: "reading",
             title: "What is JavaScript?",
-            body: `# What is JavaScript?
-
-JavaScript is the language of the web. It runs in every browser and, these days,
-on your server too.
-
-In this course we'll cover the fundamentals — the kind of things you reach for
-every single day.
-
-Here's a flavour of what code looks like:
-
-\`\`\`javascript
-function greet(name) {
-  return \`Hello, \${name}!\`;
-}
-console.log(greet("world"));
-\`\`\`
-`,
+            body: "# What is JavaScript?\n\nJavaScript is the language of the web. Every browser runs it, and these days Node runs it on servers too.\n\nThis course is a one-lesson smoke test to confirm the runtime works. The real content lives in **JavaScript: The Definitive Guide** below.\n\n```javascript\nfunction greet(name) {\n  return `Hello, ${name}!`;\n}\nconsole.log(greet('world'));\n```",
           },
           {
             id: "first-exercise",
             kind: "exercise",
             title: "Your first function",
             language: "javascript",
-            body: `# Your first function
-
-Implement \`add\` so that \`add(2, 3)\` returns \`5\`.`,
-            starter: `function add(a, b) {
-  // your code here
-}
-
-console.log('add(2, 3) =', add(2, 3));
-
-module.exports = { add };
-`,
-            solution: `function add(a, b) {
-  return a + b;
-}
-
-console.log('add(2, 3) =', add(2, 3));
-
-module.exports = { add };
-`,
-            tests: `const { add } = require("./user");
-
-test("adds two positive numbers", () => {
-  expect(add(2, 3)).toBe(5);
-});
-
-test("adds with a negative", () => {
-  expect(add(-1, 10)).toBe(9);
-});
-
-test("returns a number, not a string", () => {
-  expect(typeof add(1, 2)).toBe("number");
-});
-`,
+            body: "# Your first function\n\nImplement `add` so that `add(2, 3)` returns `5`.",
+            starter: "function add(a, b) {\n  // your code here\n}\n\nconsole.log('add(2, 3) =', add(2, 3));\n\nmodule.exports = { add };\n",
+            solution: "function add(a, b) {\n  return a + b;\n}\n\nconsole.log('add(2, 3) =', add(2, 3));\n\nmodule.exports = { add };\n",
+            tests: "const { add } = require('./user');\n\ntest('adds two positive numbers', () => {\n  expect(add(2, 3)).toBe(5);\n});\n\ntest('adds with a negative', () => {\n  expect(add(-1, 10)).toBe(9);\n});\n\ntest('returns a number, not a string', () => {\n  expect(typeof add(1, 2)).toBe('number');\n});\n",
           },
         ],
       },
     ],
   },
 
-  {
-    id: "python-warmup",
-    title: "Python Warmup",
-    author: "Kata Team",
-    description: "Pyodide-powered Python in the browser. Your first function.",
-    language: "python",
-    chapters: [
-      {
-        id: "intro",
-        title: "Warmup",
-        lessons: [
-          {
-            id: "py-add",
-            kind: "exercise",
-            title: "Your first Python function",
-            language: "python",
-            body: `# Your first Python function
-
-Implement \`add\` so that \`add(2, 3)\` returns \`5\`.
-
-The first run takes a few seconds because Python is loading into the browser
-(via Pyodide). Subsequent runs are instant.`,
-            starter: `def add(a, b):
-    # your code here
-    pass
-
-print("add(2, 3) =", add(2, 3))
-`,
-            solution: `def add(a, b):
-    return a + b
-
-print("add(2, 3) =", add(2, 3))
-`,
-            tests: `from user import add
-
-def _pos():
-    expect(add(2, 3)).to_be(5)
-test("adds two positive numbers", _pos)
-
-def _neg():
-    expect(add(-1, 10)).to_be(9)
-test("adds with a negative", _neg)
-
-def _type():
-    expect(type(add(1, 2)).__name__).to_be("int")
-test("returns an int", _type)
-`,
-          },
-        ],
-      },
-    ],
-  },
-
-  {
-    id: "rust-taste",
-    title: "A Taste of Rust",
-    author: "Kata Team",
-    description: "Syntax and ownership from the Rust Book, condensed. Code runs via play.rust-lang.org.",
-    language: "rust",
-    chapters: [
-      {
-        id: "ownership",
-        title: "Ownership",
-        lessons: [
-          {
-            id: "ownership-reading",
-            kind: "reading",
-            title: "What is ownership?",
-            body: `# What is ownership?
-
-Ownership is Rust's memory-management model. Every value has a single owner.
-When the owner goes out of scope, the value is dropped.
-
-\`\`\`rust
-fn main() {
-    let s = String::from("hello");
-    println!("{}", s);
-} // s is dropped here
-\`\`\`
-`,
-          },
-          {
-            id: "rust-add",
-            kind: "exercise",
-            title: "Your first Rust function",
-            language: "rust",
-            body: `# Your first Rust function
-
-Implement \`add\` so that \`add(2, 3)\` returns \`5\`.
-
-The first run takes a few seconds because we're compiling on the Rust
-Playground servers. Subsequent runs are faster.`,
-            starter: `pub fn add(a: i32, b: i32) -> i32 {
-    // your code here
-    0
-}
-
-fn main() {
-    println!("add(2, 3) = {}", add(2, 3));
-}
-`,
-            solution: `pub fn add(a: i32, b: i32) -> i32 {
-    a + b
-}
-
-fn main() {
-    println!("add(2, 3) = {}", add(2, 3));
-}
-`,
-            tests: `#[test]
-fn adds_two_positive_numbers() {
-    assert_eq!(add(2, 3), 5);
-}
-
-#[test]
-fn adds_with_a_negative() {
-    assert_eq!(add(-1, 10), 9);
-}
-
-#[test]
-fn is_commutative() {
-    assert_eq!(add(4, 7), add(7, 4));
-}
-`,
-          },
-        ],
-      },
-    ],
-  },
-
-  {
-    id: "swift-warmup",
-    title: "Swift Warmup",
-    author: "Kata Team",
-    description: "Runs your local swift toolchain via a Tauri subprocess. (xcode-select --install required.)",
-    language: "swift",
-    chapters: [
-      {
-        id: "intro",
-        title: "Warmup",
-        lessons: [
-          {
-            id: "swift-hello",
-            kind: "exercise",
-            title: "Hello from Swift",
-            language: "swift",
-            body: `# Hello from Swift
-
-Swift runs on your local toolchain. If \`swift --version\` doesn't work in your
-terminal, run \`xcode-select --install\` first.
-
-Print the sum of 2 and 3. For V1 this is a run-only lesson — Swift test
-harness support lands in a later step.`,
-            starter: `let a = 2
-let b = 3
-print("sum =", a + b)
-`,
-            solution: `let a = 2
-let b = 3
-print("sum =", a + b)
-`,
-            tests: "",
-          },
-        ],
-      },
-    ],
-  },
+  // The big one: hand-crafted Codecademy-style course derived from Flanagan.
+  jsDefinitiveGuide as unknown as Course,
 ];

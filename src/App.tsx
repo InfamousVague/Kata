@@ -6,6 +6,7 @@ import LessonReader from "./components/Lesson/LessonReader";
 import EditorPane from "./components/Editor/EditorPane";
 import OutputPane from "./components/Output/OutputPane";
 import ImportDialog from "./components/ImportDialog/ImportDialog";
+import SettingsDialog from "./components/SettingsDialog/SettingsDialog";
 import { runCode, isPassing, type RunResult } from "./runtimes";
 import { useProgress } from "./hooks/useProgress";
 import { useCourses } from "./hooks/useCourses";
@@ -22,6 +23,7 @@ export default function App() {
   const [openTabs, setOpenTabs] = useState<OpenCourse[]>([]);
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const [importOpen, setImportOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   /// Completion state lives in SQLite; the hook loads on mount and writes
   /// through on markCompleted. Keys are `${courseId}:${lessonId}`.
@@ -91,6 +93,7 @@ export default function App() {
           completed={completed}
           onSelectLesson={selectLesson}
           onBrowse={() => setImportOpen(true)}
+          onSettings={() => setSettingsOpen(true)}
         />
 
         <main className="kata__main">
@@ -106,6 +109,8 @@ export default function App() {
           )}
         </main>
       </div>
+
+      {settingsOpen && <SettingsDialog onDismiss={() => setSettingsOpen(false)} />}
 
       {importOpen && (
         <ImportDialog

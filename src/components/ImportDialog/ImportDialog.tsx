@@ -22,6 +22,8 @@ export default function ImportDialog({ onDismiss, onImported }: Props) {
   const [author, setAuthor] = useState("");
   const [courseId, setCourseId] = useState("");
   const [language, setLanguage] = useState<LanguageId>("javascript");
+  const [useAi, setUseAi] = useState(true);
+  const [runningLabel, setRunningLabel] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   async function pickFile() {
@@ -49,25 +51,67 @@ export default function ImportDialog({ onDismiss, onImported }: Props) {
     setStep("running");
     setError(null);
     try {
+      setRunningLabel("Extracting text from PDF…");
       const res = await invoke<{ text: string; error: string | null }>("extract_pdf_text", {
         path: pdfPath,
       });
       if (res.error) throw new Error(res.error);
 
       const finalId = courseId || slug(title);
-      const course = textToCourse(res.text, {
+
+      // Deterministic pass: splits chapters/sections, emits reading lessons.
+      let course = textToCourse(res.text, {
         courseId: finalId,
         title,
         author: author || undefined,
         language,
       });
 
+      if (useAi) {
+        setRunningLabel(`Structuring with Claude (${course.chapters.length} chapters)…`);
+        course = await enhanceWithLLM(course, language, (msg) => setRunningLabel(msg));
+      }
+
+      setRunningLabel("Saving course…");
       await invoke("save_course", { courseId: finalId, body: course });
       onImported(finalId);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setStep("meta");
     }
+  }
+
+  /// Replace the deterministic reading-only lessons in each chapter with
+  /// Claude-structured lessons (reading + exercise mix). Runs one API call
+  /// per chapter, keeping progress visible.
+  async function enhanceWithLLM(
+    course: { chapters: { id: string; title: string; lessons: { body?: string }[] }[] },
+    language: LanguageId,
+    onProgress: (msg: string) => void,
+  ) {
+    const enhanced = { ...course, chapters: [] as typeof course.chapters };
+    for (let i = 0; i < course.chapters.length; i++) {
+      const ch = course.chapters[i];
+      onProgress(`Structuring chapter ${i + 1}/${course.chapters.length}: ${ch.title}`);
+      const sectionText = ch.lessons.map((l) => l.body ?? "").filter(Boolean).join("\n\n");
+      if (!sectionText.trim()) {
+        enhanced.chapters.push(ch as any);
+        continue;
+      }
+      const raw = await invoke<string>("structure_with_llm", {
+        sectionTitle: ch.title,
+        sectionText,
+        language,
+      });
+      let lessons;
+      try {
+        lessons = JSON.parse(raw);
+      } catch (e) {
+        throw new Error(`LLM returned invalid JSON for ${ch.title}: ${e}`);
+      }
+      enhanced.chapters.push({ ...ch, lessons });
+    }
+    return enhanced as any;
   }
 
   return (
@@ -136,6 +180,21 @@ export default function ImportDialog({ onDismiss, onImported }: Props) {
                 </select>
               </Field>
 
+              <label className="kata-import-checkbox">
+                <input
+                  type="checkbox"
+                  checked={useAi}
+                  onChange={(e) => setUseAi(e.target.checked)}
+                />
+                <div>
+                  <div>Use Claude to structure into exercises</div>
+                  <div className="kata-import-hint">
+                    Requires an Anthropic API key in Settings. Produces reading +
+                    exercise lessons with runnable tests. Off = reading-only splits.
+                  </div>
+                </div>
+              </label>
+
               <div className="kata-import-actions">
                 <button className="kata-import-secondary" onClick={() => setStep("pick")}>
                   Back
@@ -154,7 +213,7 @@ export default function ImportDialog({ onDismiss, onImported }: Props) {
           {step === "running" && (
             <div className="kata-import-running">
               <div className="kata-import-spinner" />
-              <span>Extracting text and splitting into lessons…</span>
+              <span>{runningLabel || "Working…"}</span>
             </div>
           )}
 

@@ -26,16 +26,19 @@ export function useCourses() {
 
   async function refresh(): Promise<Course[]> {
     try {
-      let entries = await invoke<CourseEntry[]>("list_courses");
-      if (entries.length === 0) {
-        // First launch — write the seed to disk, then re-list.
-        await Promise.all(
-          seedCourses.map((c) =>
-            invoke("save_course", { courseId: c.id, body: c }),
-          ),
-        );
-        entries = await invoke<CourseEntry[]>("list_courses");
-      }
+      // Always (re)write seed courses to disk on launch. The repo's
+      // courses/*/course.json files are the source of truth; shipping an
+      // updated seed (bug fix, new lesson, re-run of the ingest) reaches the
+      // user the next time they open the app without them having to reset.
+      //
+      // Imported/user-added courses live under different ids so they survive.
+      await Promise.all(
+        seedCourses.map((c) =>
+          invoke("save_course", { courseId: c.id, body: c }),
+        ),
+      );
+
+      const entries = await invoke<CourseEntry[]>("list_courses");
       const full = await Promise.all(
         entries.map((e) => invoke<Course>("load_course", { courseId: e.id })),
       );

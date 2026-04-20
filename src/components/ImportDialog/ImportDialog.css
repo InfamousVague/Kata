@@ -166,6 +166,30 @@
   to { transform: rotate(360deg); }
 }
 
+.kata-import-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border-default);
+  border-radius: 6px;
+  font-size: 12.5px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+.kata-import-checkbox input[type="checkbox"] {
+  margin-top: 2px;
+}
+
+.kata-import-hint {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  margin-top: 2px;
+  line-height: 1.45;
+}
+
 .kata-import-error {
   padding: 10px 12px;
   background: rgba(239, 111, 111, 0.08);

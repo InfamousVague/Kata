@@ -9,7 +9,9 @@
 
 mod courses;
 mod ingest;
+mod llm;
 mod progress_db;
+mod settings;
 
 use std::io::Write;
 use std::process::Command;
@@ -84,6 +86,11 @@ pub fn run() {
             let db = progress_db::open(db_path)?;
             app.manage(db);
             courses::ensure_seed(app.handle())?;
+
+            // Load settings + expose as state so llm::structure_with_llm can
+            // read the API key without the frontend passing it in every call.
+            let initial = settings::read_from_disk(app.handle()).unwrap_or_default();
+            app.manage(settings::SettingsState(parking_lot::Mutex::new(initial)));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -98,6 +105,9 @@ pub fn run() {
             courses::export_course,
             courses::import_course,
             ingest::extract_pdf_text,
+            settings::load_settings,
+            settings::save_settings,
+            llm::structure_with_llm,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

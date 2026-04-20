@@ -1,0 +1,156 @@
+.kata-settings-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: grid;
+  place-items: center;
+  z-index: 100;
+  backdrop-filter: blur(4px);
+}
+
+.kata-settings-panel {
+  width: min(540px, 90vw);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-default);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+}
+
+.kata-settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--color-border-default);
+}
+
+.kata-settings-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.kata-settings-close {
+  background: none;
+  border: 0;
+  color: var(--color-text-tertiary);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.kata-settings-close:hover {
+  color: var(--color-text-primary);
+}
+
+.kata-settings-body {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.kata-settings-section {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+}
+
+.kata-settings-blurb {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--color-text-secondary);
+}
+
+.kata-settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.kata-settings-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--color-text-tertiary);
+}
+
+.kata-settings-input {
+  padding: 8px 10px;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border-default);
+  border-radius: 6px;
+  color: var(--color-text-primary);
+  font-family: "SF Mono", ui-monospace, Menlo, monospace;
+  font-size: 12.5px;
+}
+
+.kata-settings-input:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.kata-settings-note {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  color: var(--color-text-tertiary);
+  line-height: 1.5;
+}
+
+.kata-settings-note code {
+  font-family: "SF Mono", ui-monospace, Menlo, monospace;
+  font-size: 10.5px;
+  background: var(--color-bg-tertiary);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.kata-settings-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.kata-settings-saved {
+  color: #7cd97c;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.kata-settings-primary {
+  padding: 8px 16px;
+  background: #ffffff;
+  color: #000000;
+  border: 1px solid #ffffff;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.kata-settings-primary:hover:not(:disabled) {
+  opacity: 0.92;
+}
+
+.kata-settings-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.kata-settings-error {
+  padding: 10px 12px;
+  background: rgba(239, 111, 111, 0.08);
+  border: 1px solid rgba(239, 111, 111, 0.35);
+  border-radius: 6px;
+  color: #f1b5b5;
+  font-size: 12px;
+  white-space: pre-wrap;
+}
