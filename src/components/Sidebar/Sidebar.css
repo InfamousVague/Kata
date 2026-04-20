@@ -82,13 +82,14 @@
   letter-spacing: 0.1px;
 }
 
-/* Solid white pill next to course titles, chevron drawn black inside. */
+/* Solid white pill next to course titles, chevron drawn black inside.
+   Sized to match the completion dots (.kata__dot) so the tree lines up. */
 .kata__course-caret {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background: #ffffff;
   color: #000000;

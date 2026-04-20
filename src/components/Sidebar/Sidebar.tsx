@@ -92,7 +92,7 @@ function CourseGroup({
         <span className="kata__course-caret" aria-hidden>
           <Icon
             icon={expanded ? chevronDown : chevronRight}
-            size="sm"
+            size="xs"
             color="currentColor"
             weight="bold"
           />
