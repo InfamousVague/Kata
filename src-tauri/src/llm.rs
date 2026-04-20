@@ -94,10 +94,16 @@ pub async fn clean_code(
 
 Return ONLY the repaired Markdown. No commentary, no code fences around the whole response."#;
 
+    // clean_code is a mechanical reformat (strip boilerplate, fence code,
+    // rewrite headings). Sonnet is optimal for this — Opus adds no quality
+    // here, just cost + wall-clock time (Opus is ~2x slower at generating
+    // output). Pin Sonnet regardless of the user's model pick.
     call_llm(
         &settings,
         system,
         &format!("Chapter: {chapter_title}\n\n---\n\n{raw_text}"),
+        Some("claude-sonnet-4-5"),
+        &format!("clean_code[{chapter_title}]"),
     )
     .await
 }
@@ -129,7 +135,14 @@ Return ONLY the JSON array. No preamble, no markdown fences."#;
     let prompt = format!(
         "Language (target for exercises): {language}\nChapter title: {chapter_title}\n\n---\n\n{cleaned_markdown}"
     );
-    call_llm(&settings, system, &prompt).await
+    call_llm(
+        &settings,
+        system,
+        &prompt,
+        None,
+        &format!("outline_chapter[{chapter_title}]"),
+    )
+    .await
 }
 
 // ---- Stage 3: generate the full content for one lesson stub -----------------
@@ -194,7 +207,14 @@ Return ONLY the JSON object. No preamble, no code fences."#;
     let prompt = format!(
         "Language: {language}\nChapter: {chapter_title}\nStub: {stub}{prior}\n\n---\n\nChapter source:\n\n{cleaned_markdown}"
     );
-    call_llm(&settings, system, &prompt).await
+    call_llm(
+        &settings,
+        system,
+        &prompt,
+        None,
+        &format!("generate_lesson[{}]", &stub),
+    )
+    .await
 }
 
 // ---- Retry: fix an exercise that failed validation --------------------------
@@ -217,7 +237,7 @@ Return ONLY the corrected JSON object. No preamble, no code fences."#;
     let prompt = format!(
         "Failure: {failure_reason}\n\nOriginal lesson JSON:\n{original_lesson}"
     );
-    call_llm(&settings, system, &prompt).await
+    call_llm(&settings, system, &prompt, None, "retry_exercise").await
 }
 
 // ---- Shared helper ----------------------------------------------------------
@@ -232,13 +252,24 @@ async fn call_llm(
     settings: &State<'_, SettingsState>,
     system: &str,
     user: &str,
+    model_override: Option<&str>,
+    label: &str,
 ) -> Result<LlmResponse, String> {
-    let (api_key, model) = {
+    let (api_key, user_model) = {
         let s = settings.0.lock();
         (s.anthropic_api_key.clone(), s.anthropic_model.clone())
     };
     let api_key = api_key
         .ok_or_else(|| "No Anthropic API key configured — add one in Settings first.".to_string())?;
+    let model = model_override.map(|s| s.to_string()).unwrap_or(user_model);
+
+    eprintln!(
+        "[llm] → {} model={} system_chars={} user_chars={}",
+        label,
+        model,
+        system.len(),
+        user.len()
+    );
 
     let body = AnthropicRequest {
         model: &model,
@@ -251,6 +282,13 @@ async fn call_llm(
     let start = std::time::Instant::now();
 
     for attempt in 0..=MAX_RETRIES {
+        eprintln!(
+            "[llm]   {} attempt {}/{} sending request…",
+            label,
+            attempt + 1,
+            MAX_RETRIES + 1
+        );
+        let send_started = std::time::Instant::now();
         let resp = client
             .post(ANTHROPIC_API)
             .header("x-api-key", &api_key)
@@ -263,6 +301,7 @@ async fn call_llm(
         let resp = match resp {
             Ok(r) => r,
             Err(e) => {
+                eprintln!("[llm] ✗ {} network error (after {}ms): {e}", label, send_started.elapsed().as_millis());
                 if attempt < MAX_RETRIES {
                     sleep_backoff(attempt).await;
                     continue;
@@ -272,6 +311,7 @@ async fn call_llm(
         };
 
         let status = resp.status();
+        eprintln!("[llm]   {} response {} after {}ms", label, status, send_started.elapsed().as_millis());
         if status.is_success() {
             let parsed: AnthropicResponse = resp
                 .json()
@@ -279,6 +319,7 @@ async fn call_llm(
                 .map_err(|e| format!("bad response json: {e}"))?;
 
             if parsed.stop_reason.as_deref() == Some("max_tokens") {
+                eprintln!("[llm] ✗ {} truncated at max_tokens", label);
                 return Err(format!(
                     "Claude hit the {MAX_TOKENS}-token output cap before finishing — \
                      response was truncated. Raise MAX_TOKENS in llm.rs or split the \
@@ -296,6 +337,14 @@ async fn call_llm(
                 .usage
                 .map(|u| (u.input_tokens, u.output_tokens))
                 .unwrap_or((0, 0));
+            eprintln!(
+                "[llm] ✓ {} done in {}ms · {}in / {}out tokens · {} response chars",
+                label,
+                start.elapsed().as_millis(),
+                input_tokens,
+                output_tokens,
+                text.len(),
+            );
             return Ok(LlmResponse {
                 text: extract_body(&text),
                 input_tokens,
@@ -312,13 +361,14 @@ async fn call_llm(
 
         if !is_retriable || attempt == MAX_RETRIES {
             let text = resp.text().await.unwrap_or_default();
+            eprintln!("[llm] ✗ {} {} (non-retriable or exhausted): {}", label, status, text.chars().take(200).collect::<String>());
             return Err(format!("Anthropic API {status}: {text}"));
         }
 
-        tracing_like_eprintln(&format!(
-            "[llm] Anthropic {} (attempt {}/{}). Waiting before retry.",
-            status, attempt + 1, MAX_RETRIES + 1
-        ));
+        eprintln!(
+            "[llm] ! {} Anthropic {} (attempt {}/{}). Backing off…",
+            label, status, attempt + 1, MAX_RETRIES + 1
+        );
         sleep_backoff(attempt).await;
     }
 
@@ -338,10 +388,6 @@ async fn sleep_backoff(attempt: u32) {
     tokio::time::sleep(std::time::Duration::from_millis(total_ms)).await;
 }
 
-fn tracing_like_eprintln(msg: &str) {
-    // Cheap console log without pulling in tracing for one line.
-    eprintln!("{msg}");
-}
 
 /// Strip ```json or ``` fences and trailing whitespace from an LLM reply.
 fn extract_body(text: &str) -> String {
@@ -372,5 +418,12 @@ pub async fn structure_with_llm(
     // Legacy single-pass entry point; runPipeline is the preferred path.
     let legacy_system = r#"You are a single-pass legacy adapter. Return a JSON array of lessons for the Kata app given a chapter of raw text and a target language. Each lesson is either reading or exercise with the schema described in the generate_lesson system prompt. Keep it simple — 6 to 10 lessons."#;
     let prompt = format!("Language: {language}\nSection: {section_title}\n\n{section_text}");
-    call_llm(&settings, legacy_system, &prompt).await
+    call_llm(
+        &settings,
+        legacy_system,
+        &prompt,
+        None,
+        &format!("legacy_structure_with_llm[{section_title}]"),
+    )
+    .await
 }
