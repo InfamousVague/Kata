@@ -19,7 +19,9 @@ use crate::settings::SettingsState;
 
 const ANTHROPIC_API: &str = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION: &str = "2023-06-01";
-const MODEL: &str = "claude-sonnet-4-5";
+// Model is now picked per-user in Settings (anthropic_model) and read fresh
+// on each call. Default set in settings::Settings::default is sonnet-4-5.
+//
 // Sonnet 4.5 supports up to 64k output tokens. 16k comfortably holds a full
 // exercise lesson (prose + starter + solution + tests) with room to spare;
 // if we hit this ceiling we bump it again. Under-sizing leads to truncated
@@ -213,15 +215,15 @@ async fn call_llm(
     system: &str,
     user: &str,
 ) -> Result<String, String> {
-    let api_key = {
+    let (api_key, model) = {
         let s = settings.0.lock();
-        s.anthropic_api_key.clone()
+        (s.anthropic_api_key.clone(), s.anthropic_model.clone())
     };
     let api_key = api_key
         .ok_or_else(|| "No Anthropic API key configured — add one in Settings first.".to_string())?;
 
     let body = AnthropicRequest {
-        model: MODEL,
+        model: &model,
         max_tokens: MAX_TOKENS,
         system,
         messages: vec![Msg { role: "user", content: user }],

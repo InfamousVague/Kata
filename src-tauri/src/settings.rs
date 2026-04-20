@@ -9,10 +9,23 @@ use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use tauri::{Manager, State};
 
-#[derive(Debug, Default, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct Settings {
     pub anthropic_api_key: Option<String>,
+    /// Which Claude model to use for the ingest pipeline. Kept as a free-form
+    /// string so we can try new models without a schema change. Default is
+    /// the balanced choice; users can trade cost for quality in Settings.
+    pub anthropic_model: String,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            anthropic_api_key: None,
+            anthropic_model: "claude-sonnet-4-5".to_string(),
+        }
+    }
 }
 
 pub struct SettingsState(pub Mutex<Settings>);

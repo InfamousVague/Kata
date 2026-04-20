@@ -145,6 +145,45 @@
   cursor: not-allowed;
 }
 
+.kata-settings-model-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kata-settings-model {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border-default);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.kata-settings-model.is-active {
+  border-color: rgba(255, 255, 255, 0.4);
+  background: var(--color-bg-tertiary);
+}
+
+.kata-settings-model input[type="radio"] {
+  margin-top: 3px;
+}
+
+.kata-settings-model-label {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.kata-settings-model-hint {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  line-height: 1.45;
+}
+
 .kata-settings-data-row {
   display: flex;
   align-items: flex-start;

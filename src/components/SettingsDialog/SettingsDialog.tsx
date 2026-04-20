@@ -8,12 +8,32 @@ interface Props {
 
 interface Settings {
   anthropic_api_key: string | null;
+  anthropic_model: string;
 }
+
+const MODEL_OPTIONS: Array<{ id: string; label: string; hint: string }> = [
+  {
+    id: "claude-sonnet-4-5",
+    label: "Sonnet 4.5 (balanced)",
+    hint: "Default. ~$3 in / $15 out per 1M tokens. Great for most books.",
+  },
+  {
+    id: "claude-opus-4-5",
+    label: "Opus 4.5 (top quality)",
+    hint: "~$15 in / $75 out per 1M tokens. ~5× cost, best pedagogy + test design.",
+  },
+  {
+    id: "claude-haiku-4-5",
+    label: "Haiku 4.5 (fastest)",
+    hint: "~$1 in / $5 out per 1M tokens. Quick + cheap but weaker structured output.",
+  },
+];
 
 /// The only setting for now is an Anthropic API key for LLM-assisted course
 /// ingest. Stored locally at <app_data_dir>/settings.json — never synced.
 export default function SettingsDialog({ onDismiss }: Props) {
   const [apiKey, setApiKey] = useState("");
+  const [model, setModel] = useState<string>("claude-sonnet-4-5");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +43,10 @@ export default function SettingsDialog({ onDismiss }: Props) {
 
   useEffect(() => {
     invoke<Settings>("load_settings")
-      .then((s) => setApiKey(s.anthropic_api_key ?? ""))
+      .then((s) => {
+        setApiKey(s.anthropic_api_key ?? "");
+        if (s.anthropic_model) setModel(s.anthropic_model);
+      })
       .catch(() => { /* not in tauri — ignore */ });
   }, []);
 
@@ -33,7 +56,10 @@ export default function SettingsDialog({ onDismiss }: Props) {
     setSaved(false);
     try {
       await invoke("save_settings", {
-        settings: { anthropic_api_key: apiKey.trim() || null },
+        settings: {
+          anthropic_api_key: apiKey.trim() || null,
+          anthropic_model: model,
+        },
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 1600);
@@ -105,6 +131,30 @@ export default function SettingsDialog({ onDismiss }: Props) {
               Stored at <code>&lt;app_data_dir&gt;/settings.json</code>. Never leaves your machine
               except in requests to api.anthropic.com.
             </p>
+
+            <label className="kata-settings-field">
+              <span className="kata-settings-label">Model</span>
+              <div className="kata-settings-model-group">
+                {MODEL_OPTIONS.map((opt) => (
+                  <label
+                    key={opt.id}
+                    className={`kata-settings-model ${model === opt.id ? "is-active" : ""}`}
+                  >
+                    <input
+                      type="radio"
+                      name="anthropic-model"
+                      value={opt.id}
+                      checked={model === opt.id}
+                      onChange={() => setModel(opt.id)}
+                    />
+                    <div>
+                      <div className="kata-settings-model-label">{opt.label}</div>
+                      <div className="kata-settings-model-hint">{opt.hint}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </label>
           </section>
 
           <section>
