@@ -50,13 +50,13 @@ Implement \`add\` so that \`add(2, 3)\` returns \`5\`.`,
   // your code here
 }
 
-module.exports = { add };
+console.log('add(2, 3) =', add(2, 3));
 `,
             solution: `function add(a, b) {
   return a + b;
 }
 
-module.exports = { add };
+console.log('add(2, 3) =', add(2, 3));
 `,
             tests: `const { add } = require("./user");
 test("adds two numbers", () => {

@@ -8,6 +8,7 @@
 .kata-output-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   padding: 6px 12px;
   background: var(--color-bg-secondary);
   border-bottom: 1px solid var(--color-border-default);
@@ -21,15 +22,67 @@
   color: var(--color-text-tertiary);
 }
 
+.kata-output-duration {
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-tertiary);
+}
+
 .kata-output-body {
   flex: 1;
-  margin: 0;
-  padding: 12px 16px;
+  padding: 10px 14px;
   color: var(--color-text-primary);
   font-family: "SF Mono", ui-monospace, Menlo, monospace;
   font-size: 12.5px;
   line-height: 1.55;
-  white-space: pre-wrap;
   overflow: auto;
   background: var(--color-bg-primary);
+}
+
+.kata-output-empty {
+  color: var(--color-text-tertiary);
+  font-style: italic;
+}
+
+.kata-output-line {
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 2px 0;
+  border-bottom: 1px dashed transparent;
+}
+
+.kata-output-line--info {
+  color: var(--color-text-secondary);
+}
+
+.kata-output-line--warn {
+  color: #d9a800;
+}
+
+.kata-output-line--error {
+  color: #ef6f6f;
+}
+
+.kata-output-error {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid rgba(239, 111, 111, 0.35);
+  background: rgba(239, 111, 111, 0.08);
+  border-radius: 6px;
+}
+
+.kata-output-error-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: #ef6f6f;
+  margin-bottom: 4px;
+}
+
+.kata-output-error pre {
+  margin: 0;
+  color: #f1b5b5;
+  white-space: pre-wrap;
+  word-break: break-word;
 }

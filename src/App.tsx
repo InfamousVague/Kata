@@ -6,6 +6,7 @@ import TopBar from "./components/TopBar/TopBar";
 import LessonReader from "./components/Lesson/LessonReader";
 import EditorPane from "./components/Editor/EditorPane";
 import OutputPane from "./components/Output/OutputPane";
+import { runCode, type RunResult } from "./runtimes";
 import "./App.css";
 
 interface OpenCourse {
@@ -119,7 +120,23 @@ function LessonView({
 }) {
   const hasExercise = isExerciseKind(lesson);
   const [code, setCode] = useState(hasExercise ? lesson.starter : "");
-  const [output, setOutput] = useState<string>("");
+  const [result, setResult] = useState<RunResult | null>(null);
+  const [running, setRunning] = useState(false);
+
+  async function handleRun() {
+    if (!hasExercise) return;
+    setRunning(true);
+    setResult(null);
+    try {
+      const r = await runCode(lesson.language, code);
+      setResult(r);
+      // Temporary completion: ran without throwing. Real pass/fail via tests
+      // lands in Step 6.
+      if (!r.error) onComplete();
+    } finally {
+      setRunning(false);
+    }
+  }
 
   return (
     <div className="kata__lesson">
@@ -130,14 +147,9 @@ function LessonView({
             language={lesson.language}
             value={code}
             onChange={setCode}
-            onRun={() => {
-              setOutput(`[stub] would run ${lesson.language} code here`);
-              // Temporary: mark complete on any run. Real completion comes
-              // from unit-test pass/fail once Step 5+6 land.
-              onComplete();
-            }}
+            onRun={handleRun}
           />
-          <OutputPane text={output} />
+          <OutputPane result={result} running={running} />
         </div>
       )}
     </div>
