@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { seedCourses } from "./data/seedCourses";
+import { useEffect, useState } from "react";
 import { Course, Lesson, isExerciseKind } from "./data/types";
 import Sidebar from "./components/Sidebar/Sidebar";
 import TopBar from "./components/TopBar/TopBar";
@@ -8,6 +7,7 @@ import EditorPane from "./components/Editor/EditorPane";
 import OutputPane from "./components/Output/OutputPane";
 import { runCode, isPassing, type RunResult } from "./runtimes";
 import { useProgress } from "./hooks/useProgress";
+import { useCourses } from "./hooks/useCourses";
 import "./App.css";
 
 interface OpenCourse {
@@ -16,16 +16,24 @@ interface OpenCourse {
 }
 
 export default function App() {
-  const courses = seedCourses;
+  const { courses, loaded: coursesLoaded } = useCourses();
 
-  const [openTabs, setOpenTabs] = useState<OpenCourse[]>([
-    { courseId: courses[0].id, lessonId: courses[0].chapters[0].lessons[0].id },
-  ]);
+  const [openTabs, setOpenTabs] = useState<OpenCourse[]>([]);
   const [activeTabIndex, setActiveTabIndex] = useState(0);
 
   /// Completion state lives in SQLite; the hook loads on mount and writes
   /// through on markCompleted. Keys are `${courseId}:${lessonId}`.
   const { completed, markCompleted } = useProgress();
+
+  // Once courses are loaded, open the first lesson of the first course.
+  useEffect(() => {
+    if (coursesLoaded && courses.length > 0 && openTabs.length === 0) {
+      const first = courses[0];
+      setOpenTabs([
+        { courseId: first.id, lessonId: first.chapters[0].lessons[0].id },
+      ]);
+    }
+  }, [coursesLoaded, courses, openTabs.length]);
 
   const activeTab = openTabs[activeTabIndex];
   const activeCourse = courses.find((c) => c.id === activeTab?.courseId) ?? null;

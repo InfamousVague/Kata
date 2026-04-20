@@ -1,0 +1,16 @@
+{
+  "name": "kata-ingest",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "LLM-assisted book → Kata course pipeline",
+  "scripts": {
+    "ingest": "tsx cli.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.0",
+    "epub2": "^3.0.2",
+    "jszip": "^3.10.1",
+    "tsx": "^4.19.0"
+  }
+}

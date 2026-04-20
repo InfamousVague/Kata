@@ -7,6 +7,7 @@
 //!   - `progress_db` — SQLite-backed lesson-completion store.
 //!   - (future) `run_cargo_local`, `course_fs`.
 
+mod courses;
 mod progress_db;
 
 use std::io::Write;
@@ -80,6 +81,7 @@ pub fn run() {
             let db_path = progress_db::resolve_path(app.handle())?;
             let db = progress_db::open(db_path)?;
             app.manage(db);
+            courses::ensure_seed(app.handle())?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -87,6 +89,12 @@ pub fn run() {
             progress_db::list_completions,
             progress_db::mark_completion,
             progress_db::clear_completions,
+            courses::list_courses,
+            courses::load_course,
+            courses::save_course,
+            courses::delete_course,
+            courses::export_course,
+            courses::import_course,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
