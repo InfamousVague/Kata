@@ -152,11 +152,61 @@ pub fn extract_pdf_images(
     }
 }
 
+/// Common Homebrew prefixes where `pdftotext` might live. macOS GUI apps
+/// launched from Finder/Launchpad get a minimal inherited PATH (`/usr/bin:
+/// /bin:/usr/sbin:/sbin`) that does NOT include Homebrew. When the bare
+/// `pdftotext` lookup fails we try each of these in order before giving
+/// up. Covers Apple Silicon (/opt/homebrew), Intel Macs (/usr/local), and
+/// Linuxbrew.
+const BREW_PATHS: &[&str] = &[
+    "/opt/homebrew/bin/pdftotext",
+    "/usr/local/bin/pdftotext",
+    "/home/linuxbrew/.linuxbrew/bin/pdftotext",
+];
+
+/// Locate a runnable `pdftotext` binary. Returns the first candidate that
+/// actually exists on disk, or `None` if nothing matched (user hasn't
+/// installed poppler at all).
+fn find_pdftotext() -> Option<String> {
+    // Try the plain name first — works when the app was launched from a
+    // shell (`npm run tauri:dev`) that already has brew on PATH.
+    if Command::new("pdftotext")
+        .arg("-v")
+        .output()
+        .is_ok()
+    {
+        return Some("pdftotext".to_string());
+    }
+    // Fall back to common Homebrew prefixes. This is the path for a
+    // notarized .app launched from /Applications where PATH is stripped.
+    for candidate in BREW_PATHS {
+        if std::path::Path::new(candidate).exists() {
+            return Some((*candidate).to_string());
+        }
+    }
+    None
+}
+
 #[tauri::command]
 pub fn extract_pdf_text(path: String) -> ExtractResult {
+    let binary = match find_pdftotext() {
+        Some(b) => b,
+        None => {
+            return ExtractResult {
+                text: String::new(),
+                error: Some(
+                    "pdftotext not found — install poppler first (on macOS: `brew install poppler`). \
+                     If poppler IS installed but you're seeing this, please report the Homebrew \
+                     prefix you use so we can include it in the lookup fallback list."
+                        .to_string(),
+                ),
+            };
+        }
+    };
+
     // -layout preserves column boundaries + form feeds (chapter breaks) which
     // the downstream parser relies on.
-    let output = match Command::new("pdftotext")
+    let output = match Command::new(&binary)
         .arg("-layout")
         .arg(&path)
         .arg("-") // write to stdout
@@ -164,12 +214,10 @@ pub fn extract_pdf_text(path: String) -> ExtractResult {
     {
         Ok(o) => o,
         Err(e) => {
-            let hint = if e.kind() == std::io::ErrorKind::NotFound {
-                "pdftotext not found on PATH — install poppler-utils first (on macOS: `brew install poppler`).".to_string()
-            } else {
-                format!("failed to launch pdftotext: {e}")
+            return ExtractResult {
+                text: String::new(),
+                error: Some(format!("failed to launch {binary}: {e}")),
             };
-            return ExtractResult { text: String::new(), error: Some(hint) };
         }
     };
 
