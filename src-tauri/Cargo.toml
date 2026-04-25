@@ -1,6 +1,6 @@
 [package]
 name = "fishbones"
-version = "0.1.1"
+version = "0.1.2"
 description = "Learn to code through books and guided exercises"
 edition = "2021"
 default-run = "fishbones"
