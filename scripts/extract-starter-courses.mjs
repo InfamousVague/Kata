@@ -63,11 +63,14 @@ function resizeCover(srcPng, dstJpg) {
   if (!impl) return false;
   try {
     if (impl === "magick" || impl === "convert") {
-      // ImageMagick. -strip drops EXIF metadata, -interlace Plane
-      // produces progressive JPEG (faster perceived load).
+      // ImageMagick — same args for both the `magick` (v7) and
+      // `convert` (legacy) commands. `-resize 480x>` only shrinks
+      // (the `>` qualifier means "resize only if larger");
+      // `-strip` drops EXIF; `-interlace Plane` produces a
+      // progressive JPEG so the cover paints faster on slow
+      // connections.
       execFileSync(impl, [
-        impl === "magick" ? "convert" : srcPng,
-        ...(impl === "magick" ? [srcPng] : []),
+        srcPng,
         "-resize", "480x>",
         "-strip",
         "-interlace", "Plane",
@@ -88,6 +91,18 @@ function resizeCover(srcPng, dstJpg) {
   } catch {
     return false;
   }
+}
+
+let warnedNoResizer = false;
+function warnIfNoResizer() {
+  if (warnedNoResizer) return;
+  if (pickResizeImpl()) return;
+  warnedNoResizer = true;
+  console.warn(
+    "[starter-courses] no image resizer found (tried `magick`, " +
+      "`convert`, `sips`). Cover art will be SKIPPED on this run — " +
+      "install imagemagick for production builds.",
+  );
 }
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -159,6 +174,10 @@ async function main() {
     await rm(OUT, { recursive: true, force: true });
   }
   await mkdir(OUT, { recursive: true });
+
+  // Surface the missing-resizer warning ONCE up-front rather than
+  // burying it in `+ cover.png` absences across 22 lines.
+  warnIfNoResizer();
 
   const manifest = [];
   for (const id of PACK_IDS) {

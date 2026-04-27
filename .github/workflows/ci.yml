@@ -67,6 +67,12 @@ jobs:
       - name: Install deps
         run: npm ci
 
+      # ImageMagick is what extract-starter-courses.mjs uses for
+      # cover-art resize; the build's smoke check verifies covers
+      # land in the dist, so we need it present in CI too.
+      - name: Install ImageMagick (for cover-art resize)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq imagemagick
+
       # Cache the vendor-staging output so consecutive runs don't
       # re-bundle Babel + React + Three.js + Svelte. Keyed off the
       # vendor script and lockfile — change either and the cache
