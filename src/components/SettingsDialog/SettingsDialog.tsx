@@ -17,7 +17,11 @@ interface Props {
   /// Open the sign-in modal. Wired from App.tsx so the Account
   /// section can offer a "Sign in" CTA to signed-out users without
   /// each section having to know about the modal-state plumbing.
-  onRequestSignIn: () => void;
+  ///
+  /// Optional: omitted on the web build, where OAuth has no path
+  /// (Tauri-only). When undefined we hide the Account section's
+  /// sign-in CTA entirely.
+  onRequestSignIn?: () => void;
 }
 
 interface Settings {
@@ -90,14 +94,23 @@ export default function SettingsDialog({ onDismiss, cloud, onRequestSignIn }: Pr
   // shows a sign-in CTA so the entry point is discoverable before
   // the learner has an account. The `hint` swaps out depending on
   // sign-in state to give the rail a useful summary either way.
+  //
+  // Web build: drop the rail entry entirely. There's nothing to do
+  // in the Account section without a sign-in path, and showing an
+  // empty pane is worse than not advertising it.
+  const accountAvailable = !!onRequestSignIn || cloud.signedIn;
   const sections = useMemo<SectionDef[]>(
     () => [
       ...BASE_SECTIONS,
-      cloud.signedIn
-        ? ACCOUNT_SECTION
-        : { ...ACCOUNT_SECTION, hint: "Sign in to sync progress" },
+      ...(accountAvailable
+        ? [
+            cloud.signedIn
+              ? ACCOUNT_SECTION
+              : { ...ACCOUNT_SECTION, hint: "Sign in to sync progress" },
+          ]
+        : []),
     ],
-    [cloud.signedIn],
+    [cloud.signedIn, accountAvailable],
   );
 
   // If the active section disappears (e.g. user signs out while the
@@ -369,6 +382,7 @@ export default function SettingsDialog({ onDismiss, cloud, onRequestSignIn }: Pr
             )}
 
             {section === "account" &&
+              onRequestSignIn &&
               !(cloud.signedIn && typeof cloud.user === "object" && cloud.user) && (
                 <section>
                   <h3 className="fishbones-settings-section">Account</h3>

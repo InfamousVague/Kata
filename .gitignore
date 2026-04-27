@@ -39,3 +39,9 @@ public/starter-courses/
 *.log
 test-results/
 playwright-report/
+
+# TS incremental build outputs
+*.tsbuildinfo
+# Compiled vite config (tsc by-product when running --noEmit on .ts file)
+vite.config.d.ts
+vite.config.js

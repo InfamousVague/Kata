@@ -54,8 +54,8 @@ const installing = `Fishbones runs on macOS, Linux, and Windows. The dev workflo
 
 \`\`\`bash
 # Clone
-git clone <your-fork-url> kata
-cd kata
+git clone <your-fork-url> Fishbones
+cd Fishbones
 
 # Install JS deps
 bun install   # or: npm install
@@ -1583,7 +1583,7 @@ course = {
     ],
 }
 
-OUT = "/Users/.../kata/src-tauri/resources/bundled-packs/my-course.fishbones"
+OUT = "/Users/.../Fishbones/src-tauri/resources/bundled-packs/my-course.fishbones"
 
 with zipfile.ZipFile(OUT, "w", zipfile.ZIP_DEFLATED) as z:
     z.writestr("course.json", json.dumps(course, indent=2))

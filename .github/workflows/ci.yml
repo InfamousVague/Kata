@@ -37,7 +37,7 @@ jobs:
       # Fishbones' package.json declares `@mattmattmattmatt/base` as
       # a file:../../Libs/base dependency — i.e. it expects a sibling
       # `Libs/base/` two directories above the repo. Locally that's
-      # /Users/matt/Development/{Apps/kata,Libs/base}; in CI we have
+      # /Users/matt/Development/{Apps/Fishbones,Libs/base}; in CI we have
       # to materialise the same layout. Checkout into _base inside
       # the workspace, then symlink it into place at the absolute
       # path the file: spec resolves to.

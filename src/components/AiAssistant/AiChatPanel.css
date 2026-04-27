@@ -72,8 +72,8 @@
   width: 18px;
   height: 18px;
   background: currentColor;
-  -webkit-mask: url("/fishbones.png") no-repeat center / contain;
-  mask: url("/fishbones.png") no-repeat center / contain;
+  -webkit-mask: url("/ai-fish-skeleton.svg") no-repeat center / contain;
+  mask: url("/ai-fish-skeleton.svg") no-repeat center / contain;
   color: var(--color-text-secondary);
 }
 

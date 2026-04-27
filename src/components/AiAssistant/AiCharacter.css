@@ -121,16 +121,16 @@
   pointer-events: none;
 }
 
-/* Fishbones glyph — dark slate so it pops against the bright face,
-   regardless of theme. Mask-image lets us re-colour the same PNG
-   via `background` without shipping a second asset. */
+/* Generic fish-skeleton silhouette tinted dark slate so it pops against
+   the bright orb face. SVG used as a CSS mask so the colour stays
+   theme-controllable independent of the asset. */
 .fishbones-ai-character-icon {
   position: relative;
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   background: #1f2330;
-  -webkit-mask: url("/fishbones.png") no-repeat center / contain;
-  mask: url("/fishbones.png") no-repeat center / contain;
+  -webkit-mask: url("/ai-fish-skeleton.svg") no-repeat center / contain;
+  mask: url("/ai-fish-skeleton.svg") no-repeat center / contain;
   z-index: 2;
   filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.06));
 }

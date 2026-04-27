@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { Course, LanguageId } from "../../data/types";
 import { useCourseCover } from "../../hooks/useCourseCover";
 import FishbonesLoader from "../Shared/FishbonesLoader";
@@ -40,7 +41,15 @@ export default function BookCover({
   // `prefetchCovers` in CourseLibrary). This hook just reads from the
   // shared cache that prefetch populates — no extra IPC per card.
   const coverUrl = useCourseCover(course.id, course.coverFetchedAt);
-  const hasCover = !!coverUrl;
+  // Track image load failures so a 404 / blocked-by-CSP / etc. on
+  // the URL falls back to the language-tinted glyph tile rather
+  // than rendering Safari's broken-image placeholder. Resets when
+  // the URL changes (rare, but happens after a fresh cover fetch).
+  const [imageError, setImageError] = useState(false);
+  useEffect(() => {
+    setImageError(false);
+  }, [coverUrl]);
+  const hasCover = !!coverUrl && !imageError;
 
   // Brand-coloured language badge pinned to the top-right corner of
   // every card. Shown over both real covers and the fallback tile so
@@ -75,6 +84,7 @@ export default function BookCover({
           alt={`${course.title} cover`}
           loading="lazy"
           draggable={false}
+          onError={() => setImageError(true)}
         />
       )}
 

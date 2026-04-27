@@ -253,6 +253,16 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
 const PACKS_DIR = join(ROOT, "src-tauri", "resources", "bundled-packs");
 const OUT = join(ROOT, "public", "starter-courses");
+/// Manual cover overrides. A PNG at `cover-overrides/<pack-id>.png`
+/// wins over both the in-zip `cover.png` AND the language-tinted
+/// synthesiser. This is how we ship freshly-generated artwork for
+/// packs whose .fishbones zip predates the cover (we don't want to
+/// re-zip every time a designer re-runs the cover gen). Drop the
+/// PNG in, run `node scripts/extract-starter-courses.mjs`, commit
+/// both the override PNG and the resulting JPEG. The override path
+/// also lets a stale or off-style in-zip cover be quietly replaced
+/// without touching the source pack.
+const COVER_OVERRIDES = join(ROOT, "cover-overrides");
 
 /// Curated browser-compatible starter set. IDs match the .fishbones
 /// filenames (without the extension). Order here is the order the
@@ -268,31 +278,25 @@ const OUT = join(ROOT, "public", "starter-courses");
 ///     Kotlin, C#, Assembly, Swift, SvelteKit's Node sidecar). Those
 ///     stay desktop-only.
 const PACK_IDS = [
-  // Languages-as-a-foundation books
-  "javascript-crash-course",
-  "python-crash-course",
-  "javascript-the-definitive-guide",
+  // Languages-as-a-foundation books.
+  // The Rust Programming Language ("the book") — open-source under MIT/Apache,
+  // safe to ship as a default. Runs via the proxied Rust playground (no
+  // local toolchain needed in the browser build).
+  "the-rust-programming-language",
 
   // Frameworks + libraries
   "svelte-5-complete",
   "solidjs-fundamentals",
-  "fluent-react",
   "htmx-fundamentals",
   "astro-fundamentals",
-  "bun-fundamentals",
   "bun-complete",
-  "learning-react-native",
   "react-native",
-  "interactive-web-development-with-three-js-and-a-frame",
 
   // Smart-contract / web3 / crypto
   "solidity-complete",
   "solana-programs",
   "viem-ethers",
   "cryptography-fundamentals",
-
-  // Languages-via-playground (no local toolchain needed)
-  "learning-go",
 
   // Challenge packs — one per browser-runnable language
   "challenges-javascript-handwritten",
@@ -301,7 +305,6 @@ const PACK_IDS = [
   "challenges-go-handwritten",
   "challenges-rust-handwritten",
   "challenges-reactnative-handwritten",
-  "challenges-reactnative-visual",
 ];
 
 async function main() {
@@ -351,22 +354,36 @@ async function main() {
       await writeFile(outFile, courseJson, "utf-8");
       const info = await stat(outFile);
 
-      // Cover art — resize the bundled cover.png to 480px JPEG q78
-      // (~30-70KB). When the pack ships without a cover.png (newer
-      // packs that haven't had artwork generated yet), synthesise
-      // a themed gradient tile using the course's language so the
-      // library shelf still reads as a continuous design rather
-      // than a mix of real covers + missing-image squares.
-      const coverPath = join(work, "cover.png");
+      // Cover art — three-tier lookup, first match wins:
+      //   1. cover-overrides/<id>.png — manual designer drop-in.
+      //      Lets us replace stale or missing in-zip covers without
+      //      re-zipping the .fishbones (which often invalidates the
+      //      pack's checksum on disk).
+      //   2. cover.png inside the .fishbones zip — the historical
+      //      home for course artwork, set when the pack was first
+      //      authored.
+      //   3. synthesiseCover() — language-tinted gradient + caption.
+      //      Last-resort so the library shelf still reads as a
+      //      continuous design rather than a mix of real covers +
+      //      missing-image squares.
+      // All three converge on the same 480px JPEG q78 output so
+      // downstream consumers (web manifest, kata library shelf) don't
+      // care which path produced it.
+      const overridePath = join(COVER_OVERRIDES, `${id}.png`);
+      const inZipPath = join(work, "cover.png");
       const candidate = `${id}.jpg`;
       const dst = join(OUT, candidate);
       let coverFile;
-      if (existsSync(coverPath)) {
-        if (resizeCover(coverPath, dst)) {
-          coverFile = candidate;
-        }
+      let coverSource;
+      if (existsSync(overridePath) && resizeCover(overridePath, dst)) {
+        coverFile = candidate;
+        coverSource = "override";
+      } else if (existsSync(inZipPath) && resizeCover(inZipPath, dst)) {
+        coverFile = candidate;
+        coverSource = "pack";
       } else if (synthesizeCover(course.language || "javascript", course.title || id, dst)) {
         coverFile = candidate;
+        coverSource = "synth";
         console.log(
           `  ↳ synthesised themed cover for ${id} (${course.language})`,
         );
@@ -383,7 +400,7 @@ async function main() {
       });
       console.log(
         `[starter-courses] staged ${id} (${(info.size / 1024).toFixed(0)} KB)` +
-          (coverFile ? " + cover.png" : ""),
+          (coverFile ? ` + cover [${coverSource}]` : ""),
       );
     } finally {
       await rm(work, { recursive: true, force: true });

@@ -84,6 +84,15 @@ function fetchCover(courseId: string, cacheBust?: number): Promise<Resolved> {
 export async function prefetchCovers(
   entries: Array<{ courseId: string; cacheBust?: number }>,
 ): Promise<number> {
+  // Web build: covers are static files synthesized into a URL by
+  // useCourseCover's web branch — no IPC, no fetch, no caching
+  // here. Returning 0 keeps the library's "loading N covers"
+  // label honest (no covers were fetched, because none needed to
+  // be). Skipping this stops the kata invoke stub from throwing
+  // "TAURI_UNAVAILABLE: load_course_cover" once per course on
+  // page boot, which (caught or not) bloats the Safari console.
+  if (isWeb) return 0;
+
   let fetched = 0;
   await Promise.all(
     entries.map(async (e) => {

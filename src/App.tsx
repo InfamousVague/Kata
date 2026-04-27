@@ -155,22 +155,54 @@ export default function App() {
         try {
           const url = new URL(raw);
           // Defensive guard — the listener fires for any registered
-          // scheme, and we only know how to handle our OAuth callback.
+          // scheme, and we only know how to handle our own.
           if (url.protocol !== "fishbones:") continue;
-          const status = url.searchParams.get("status");
-          const token = url.searchParams.get("token");
-          if (status === "ok" && token) {
-            console.log("[fishbones] oauth callback: success");
-            void cloudRef.current.applyOAuthToken(token);
-          } else if (status === "error") {
-            console.error(
-              `[fishbones] oauth callback: error ${url.searchParams.get("error")} — ${url.searchParams.get("message")}`,
-            );
+
+          // Route on the URL host (the segment after `fishbones://`):
+          //   fishbones://oauth/done?status=ok&token=…   → cloud sign-in
+          //   fishbones://open?courseId=…&lessonId=…     → land on lesson
+          //
+          // Unknown hosts are logged + ignored so a future scheme
+          // addition doesn't crash older clients that haven't been
+          // updated.
+          const host = url.host || url.pathname.replace(/^\/+/, "").split("/")[0];
+
+          if (host === "oauth") {
+            const status = url.searchParams.get("status");
+            const token = url.searchParams.get("token");
+            if (status === "ok" && token) {
+              console.log("[fishbones] oauth callback: success");
+              void cloudRef.current.applyOAuthToken(token);
+            } else if (status === "error") {
+              console.error(
+                `[fishbones] oauth callback: error ${url.searchParams.get("error")} — ${url.searchParams.get("message")}`,
+              );
+            } else {
+              console.warn(
+                `[fishbones] oauth callback: unrecognised payload ${raw}`,
+              );
+            }
+          } else if (host === "open") {
+            // "Open in Fishbones" handoff from fishbones.academy. The
+            // courseId is required; lessonId is optional (we fall
+            // through to the course's first lesson if it's missing or
+            // doesn't match anything in the course). We only stash a
+            // pendingOpen request — the auto-open + warm-path effects
+            // below pick it up and route accordingly.
+            const courseId = url.searchParams.get("courseId");
+            if (courseId) {
+              const lessonId = url.searchParams.get("lessonId") ?? undefined;
+              setPendingOpen({ courseId, lessonId });
+            } else {
+              console.warn(
+                `[fishbones] open deep-link missing courseId: ${raw}`,
+              );
+            }
           } else {
-            console.warn(`[fishbones] oauth callback: unrecognised payload ${raw}`);
+            console.warn(`[fishbones] unrecognised deep link host=${host}: ${raw}`);
           }
         } catch (e) {
-          console.error("[fishbones] oauth callback: parse failed", e);
+          console.error("[fishbones] deep-link: parse failed", e);
         }
       }
     };
@@ -338,9 +370,17 @@ export default function App() {
   /// full-width pane (e.g. writing a long exercise) doesn't have to
   /// re-hide the sidebar every launch. Toggled by the top-bar button or
   /// Cmd+\\ (matches VS Code's muscle memory).
+  ///
+  /// Storage key migrated from `kata:sidebarCollapsed` to
+  /// `fishbones:sidebarCollapsed` in v0.1.4. Read prefers the new key
+  /// and falls back to the legacy one so existing installs keep their
+  /// preference; the next write lands under the new key.
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     try {
-      return localStorage.getItem("kata:sidebarCollapsed") === "1";
+      const v =
+        localStorage.getItem("fishbones:sidebarCollapsed") ??
+        localStorage.getItem("kata:sidebarCollapsed");
+      return v === "1";
     } catch {
       return false;
     }
@@ -348,9 +388,13 @@ export default function App() {
   useEffect(() => {
     try {
       localStorage.setItem(
-        "kata:sidebarCollapsed",
+        "fishbones:sidebarCollapsed",
         sidebarCollapsed ? "1" : "0",
       );
+      // Clear the legacy key once we've persisted to the new one so
+      // the migration is a one-shot and `localStorage.length` doesn't
+      // accumulate dead entries forever.
+      localStorage.removeItem("kata:sidebarCollapsed");
     } catch {
       /* private mode — fine to drop */
     }
@@ -384,24 +428,116 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // On fresh launch (courses loaded, no tabs yet), open the first lesson
-  // of the first course as a convenience. Skipped on re-mount once the
-  // learner has actively opened/closed tabs — closing the last tab should
-  // NOT auto-re-open it, the learner wanted the library view. The ref is
-  // flipped after the first auto-open OR after any manual selectLesson
-  // call so repeated close-all cycles don't keep re-opening.
+  // Pending-open: a request to land on a specific course+lesson at boot,
+  // sourced from either:
+  //   - the web build's URL params (`?courseId=…&lessonId=…`) — set when
+  //     fishbones.academy hands the learner over via "Start in browser"
+  //     or "Open in Fishbones".
+  //   - a desktop `fishbones://open?courseId=…&lessonId=…` deep link,
+  //     handled by the listener above (which calls setPendingOpen).
+  //
+  // The state survives the initial render so the auto-open effect below
+  // can pick the right course as soon as `coursesLoaded` flips true. On
+  // a successful match we clear pendingOpen so a later URL-bar manual
+  // edit (or a stale ?courseId in browser history) doesn't yank the
+  // learner away from a tab they actively opened.
+  const [pendingOpen, setPendingOpen] = useState<{
+    courseId: string;
+    lessonId?: string;
+  } | null>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const courseId = params.get("courseId");
+      if (!courseId) return null;
+      const lessonId = params.get("lessonId") ?? undefined;
+      return { courseId, lessonId };
+    } catch {
+      return null;
+    }
+  });
+
+  // On fresh launch (courses loaded, no tabs yet), open a starting lesson
+  // as a convenience. Picks the pendingOpen target when one's set + the
+  // course exists; otherwise falls back to courses[0]. Skipped on re-mount
+  // once the learner has actively opened/closed tabs — closing the last
+  // tab should NOT auto-re-open it, the learner wanted the library view.
+  // The ref is flipped after the first auto-open OR after any manual
+  // selectLesson call so repeated close-all cycles don't keep re-opening.
   const didAutoOpen = useRef(false);
   useEffect(() => {
     if (didAutoOpen.current) return;
-    if (coursesLoaded && courses.length > 0 && openTabs.length === 0) {
-      didAutoOpen.current = true;
-      const first = courses[0];
-      const firstLessonId = first.chapters[0]?.lessons[0]?.id;
-      if (firstLessonId) {
-        setOpenTabs([{ courseId: first.id, lessonId: firstLessonId }]);
+    if (!coursesLoaded || courses.length === 0 || openTabs.length !== 0) return;
+
+    let target = pendingOpen
+      ? courses.find((c) => c.id === pendingOpen.courseId)
+      : undefined;
+    if (!target) target = courses[0];
+
+    // Resolve the lesson id: prefer the pendingOpen lessonId if it
+    // actually exists in the resolved course, otherwise fall through
+    // to the course's first lesson. Guards against stale links to
+    // lessons that were renamed or removed.
+    const lessonExists =
+      pendingOpen?.lessonId &&
+      target.id === pendingOpen.courseId &&
+      target.chapters.some((ch) =>
+        ch.lessons.some((l) => l.id === pendingOpen.lessonId),
+      );
+    const lessonId = lessonExists
+      ? pendingOpen!.lessonId!
+      : target.chapters[0]?.lessons[0]?.id;
+    if (!lessonId) return;
+
+    didAutoOpen.current = true;
+    setOpenTabs([{ courseId: target.id, lessonId }]);
+    setPendingOpen(null);
+
+    // Strip ?courseId=… off the URL so a refresh doesn't re-yank
+    // them back to this course after they've moved on. Only does the
+    // strip when we matched something — leaves a pendingOpen that
+    // failed to resolve in the URL so a power user can see what was
+    // requested.
+    if (pendingOpen) {
+      try {
+        window.history.replaceState(
+          null,
+          "",
+          window.location.pathname + window.location.hash,
+        );
+      } catch {
+        /* history.replaceState isn't available — fine, no-op */
       }
     }
-  }, [coursesLoaded, courses, openTabs.length]);
+  }, [coursesLoaded, courses, openTabs.length, pendingOpen]);
+
+  // Warm-path: if a deep link arrives after the app's already booted
+  // and the learner has tabs open, honour it via selectLesson rather
+  // than appending it to the auto-open queue.
+  useEffect(() => {
+    if (!pendingOpen) return;
+    if (!didAutoOpen.current) return; // cold-start path handles it
+    if (!coursesLoaded || courses.length === 0) return;
+    const course = courses.find((c) => c.id === pendingOpen.courseId);
+    if (!course) {
+      setPendingOpen(null);
+      return;
+    }
+    const exists =
+      pendingOpen.lessonId &&
+      course.chapters.some((ch) =>
+        ch.lessons.some((l) => l.id === pendingOpen.lessonId),
+      );
+    const lessonId = exists
+      ? pendingOpen.lessonId!
+      : course.chapters[0]?.lessons[0]?.id;
+    if (!lessonId) return;
+    selectLesson(course.id, lessonId);
+    setPendingOpen(null);
+    // selectLesson is stable enough that listing it as a dep would
+    // cause the effect to run on every keystroke (it's recreated each
+    // render). pendingOpen + coursesLoaded are the actual triggers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingOpen, coursesLoaded, courses]);
 
   const activeTab = openTabs[activeTabIndex];
   const activeCourse = courses.find((c) => c.id === activeTab?.courseId) ?? null;
@@ -637,21 +773,26 @@ export default function App() {
         // hidden while the cloud hook is still booting (`user === null`,
         // briefly during the `me` refetch); once it lands we pass a
         // concrete `signedIn` boolean so the row picks the right shape.
+        //
+        // Web build: pretend we're permanently in a "no auth attempted"
+        // state. Passing `undefined` keeps the TopBar from rendering
+        // either a "Sign in" CTA or a signed-in chip — login is hidden
+        // entirely on the browser variant until OAuth has a web path.
         signedIn={
-          cloud.user === null ? undefined : cloud.signedIn
+          isWeb ? undefined : cloud.user === null ? undefined : cloud.signedIn
         }
         userDisplayName={
-          cloud.signedIn && typeof cloud.user === "object" && cloud.user
+          !isWeb && cloud.signedIn && typeof cloud.user === "object" && cloud.user
             ? cloud.user.display_name
             : null
         }
         userEmail={
-          cloud.signedIn && typeof cloud.user === "object" && cloud.user
+          !isWeb && cloud.signedIn && typeof cloud.user === "object" && cloud.user
             ? cloud.user.email
             : null
         }
-        onSignIn={() => setSignInOpen(true)}
-        onSignOut={() => {
+        onSignIn={isWeb ? undefined : () => setSignInOpen(true)}
+        onSignOut={isWeb ? undefined : () => {
           void cloud.signOut();
         }}
       />
@@ -835,7 +976,7 @@ export default function App() {
         <SettingsDialog
           cloud={cloud}
           onDismiss={() => setSettingsOpen(false)}
-          onRequestSignIn={() => setSignInOpen(true)}
+          onRequestSignIn={isWeb ? undefined : () => setSignInOpen(true)}
         />
       )}
 
@@ -1011,15 +1152,23 @@ export default function App() {
           `cloud.user === false` (= no token, not signed in) and on
           a localStorage "permanent dismiss" flag, so this stays
           quiet on every subsequent launch unless the user clicks
-          "Skip" without ticking the checkbox. */}
-      <FirstLaunchPrompt cloud={cloud} />
+          "Skip" without ticking the checkbox.
+
+          Web build: skipped entirely. The sign-in flow relies on
+          Tauri's `start_oauth` command + a `fishbones://` deep-link
+          callback, neither of which exists in a plain browser. We
+          treat the web variant as "always anonymous" until that
+          flow is ported to a popup-based redirect. See SignInDialog
+          for the auth mechanics. */}
+      {!isWeb && <FirstLaunchPrompt cloud={cloud} />}
 
       {/* Re-openable sign-in modal. Driven by the "Sign in" button in
           the TopBar stats dropdown — separate from the first-launch
           prompt above (which has a one-time-show gate of its own).
           The dialog auto-closes on a successful OAuth deep-link round-
-          trip via its internal `awaitingOAuth` watcher. */}
-      {signInOpen && (
+          trip via its internal `awaitingOAuth` watcher. Web build:
+          unreachable because the Sign-in CTA is also gated below. */}
+      {signInOpen && !isWeb && (
         <SignInDialog
           cloud={cloud}
           onClose={() => setSignInOpen(false)}

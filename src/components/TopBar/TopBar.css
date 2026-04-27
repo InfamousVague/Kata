@@ -46,19 +46,20 @@
 .fishbones__topbar-brand:hover {
   opacity: 0.78;
 }
-.fishbones__topbar-brand img {
-  width: 22px;
-  height: 22px;
+.fishbones__topbar-brand-icon {
+  /* Skinny fishbones wordmark — height pins the size, width auto-flows
+     to preserve the natural ~2.7:1 aspect ratio. Mirrors the academy
+     site's `.nav__brand-icon`. */
+  height: 20px;
+  width: auto;
   display: block;
-  /* Tint to text color so the logo sits with the wordmark in any
-     theme. The PNG itself is monochrome so this just shifts hue. */
-  filter: brightness(0) invert(1);
-  opacity: 0.9;
 }
-.fishbones__topbar-brand span {
-  /* Subtle gradient on the wordmark — same trick mattssoftware's
-     hero uses, so the brand looks like a deliberate marketing
-     element rather than a barcoded label. */
+.fishbones__topbar-brand-tld {
+  /* Subtle gradient on the TLD half so the wordmark reads as a
+     deliberate brand element, not a debug label. */
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   background: linear-gradient(135deg, #fafafa 0%, #c7c7d0 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;

@@ -3,6 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="/fishbones.png" />
+    <link rel="apple-touch-icon" href="/fishbones.png" />
     <title>Fishbones</title>
     <!-- Pre-React preloader. The main bundle + Monaco take ~1s to parse
          on a cold launch and React's bootloader can't paint until the
@@ -58,9 +60,8 @@
       #preloader-logo {
         width: 48px;
         height: 48px;
-        background: #eaeaea;
-        -webkit-mask: url("/fishbones.png") no-repeat center / contain;
-        mask: url("/fishbones.png") no-repeat center / contain;
+        background: url("/fishbones.png") no-repeat center / contain;
+        border-radius: 6px;
         animation: preloader-pulse 1.8s ease-in-out infinite;
       }
       #preloader-label {

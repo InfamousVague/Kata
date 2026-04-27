@@ -306,11 +306,8 @@
 .fishbones-output-running-logo {
   width: 48px;
   height: 48px;
-  background: currentColor;
-  /* One PNG, two colors: mask replaces the image's opaque pixels with
-     whatever `currentColor` resolves to at the current theme. */
-  -webkit-mask: url("/fishbones.png") no-repeat center / contain;
-  mask: url("/fishbones.png") no-repeat center / contain;
+  background: url("/fishbones.png") no-repeat center / contain;
+  border-radius: 6px;
   animation: fishbones-output-logo-pulse 1.8s ease-in-out infinite;
 }
 
