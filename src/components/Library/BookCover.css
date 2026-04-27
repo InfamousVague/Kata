@@ -215,3 +215,45 @@
 .fishbones-book--loading:hover {
   transform: none;
 }
+
+/* ── Language badge ──────────────────────────────────────────────
+ * Brand-coloured pill in the top-right corner showing the course's
+ * language icon. Sits above the cover image + gradient so it stays
+ * legible against any background.
+ *
+ * Inverted treatment vs. the original dark frosted fill: a near-
+ * white surface with the brand-coloured glyph inside reads about
+ * 2–3× more contrast on the dark themes Fishbones ships, AND keeps
+ * dark brand marks (Python's blue snake, Three.js's logo, etc.)
+ * from disappearing into a dark backdrop. */
+.fishbones-book-langbadge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  /* Bright disc face — the icon's brand colour reads sharply against
+     near-white regardless of cover art behind. */
+  background: #ffffff;
+  /* Brand colour for the SVG itself; defaults via the inline custom
+     property set on the element. Falls through to a slate grey if
+     the property isn't supplied (defensive — should never trigger). */
+  color: var(--book-langbadge-color, #1f2330);
+  /* Soft drop-shadow + hairline dark rim so the disc reads as a
+     physical chip lifted off the cover, not a sticker. */
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(0, 0, 0, 0.08);
+  transition: none;
+}
+
+.fishbones-book-langbadge svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}

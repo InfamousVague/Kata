@@ -3,6 +3,7 @@ import { Icon } from "@base/primitives/icon";
 import { code as codeIcon } from "@base/primitives/icon/icons/code";
 import { eye } from "@base/primitives/icon/icons/eye";
 import { columns2 } from "@base/primitives/icon/icons/columns-2";
+import { smartphone } from "@base/primitives/icon/icons/smartphone";
 import "@base/primitives/icon/icon.css";
 import type { LanguageId } from "../../data/types";
 import { usePlaygroundFiles } from "../../hooks/usePlaygroundFiles";
@@ -10,6 +11,12 @@ import { useToolchainStatus } from "../../hooks/useToolchainStatus";
 import { runFiles, isPassing, type RunResult } from "../../runtimes";
 import EditorPane from "../Editor/EditorPane";
 import OutputPane from "../Output/OutputPane";
+import PhoneToggleButton from "../FloatingPhone/PhoneToggleButton";
+import {
+  openPhonePopout,
+  closePhonePopout,
+  makePhonePreviewBus,
+} from "../../lib/phonePopout";
 import Workbench from "../Workbench/Workbench";
 import MissingToolchainBanner from "../MissingToolchain/MissingToolchainBanner";
 import "./PlaygroundView.css";
@@ -111,21 +118,37 @@ const LANGUAGE_OPTIONS: Array<{ id: LanguageId; label: string }> = [
   { id: "threejs", label: "Three.js" },
   { id: "react", label: "React (JSX + CSS)" },
   { id: "reactnative", label: "React Native" },
+  { id: "svelte", label: "Svelte 5" },
+  { id: "solid", label: "SolidJS" },
+  { id: "htmx", label: "HTMX" },
+  { id: "astro", label: "Astro" },
+  { id: "bun", label: "Bun" },
+  { id: "tauri", label: "Tauri (Rust)" },
+  { id: "solidity", label: "Solidity" },
 ];
 
 /// View layout options for the workbench. `split` (editor + output
 /// side by side) is the default; `editor` collapses the output entirely
 /// for focused code time; `preview` collapses the editor so the URL
 /// card / console fills the pane (useful for reading a long stack
-/// trace or stacking the URL card front-and-center). Previews now open
-/// in an external browser, so there's no iframe view to device-size.
-type ViewMode = "split" | "editor" | "preview";
+/// trace or stacking the URL card front-and-center). `phone` wraps the
+/// output pane in an iPhone-shaped chrome (PhoneFrame) — only available
+/// for the React Native and Swift languages, where a device frame is
+/// the right mental model.
+type ViewMode = "split" | "editor" | "preview" | "phone";
 
 const VIEW_MODE_OPTIONS: Array<{ id: ViewMode; label: string; icon: string }> = [
   { id: "split", label: "Split", icon: columns2 },
   { id: "editor", label: "Editor", icon: codeIcon },
   { id: "preview", label: "Output", icon: eye },
+  { id: "phone", label: "Phone", icon: smartphone },
 ];
+
+/// Languages where the "Phone simulator" view mode makes sense. Other
+/// languages drop the option entirely from the segmented control — a
+/// terminal language being shown inside a device frame is more
+/// confusing than helpful.
+const PHONE_VIEW_LANGUAGES = new Set<LanguageId>(["reactnative", "swift"]);
 
 /// jsfiddle-style free-form coding sandbox. No lesson prose, no "mark
 /// complete" — just a language picker, editor, and output pane. Code
@@ -147,8 +170,86 @@ export default function PlaygroundView() {
   // immediately without the learner having to switch views.
   const [viewMode, setViewMode] = useState<ViewMode>("split");
 
+  // Floating phone preference: remembered in localStorage so the
+  // user's "I want the popout" intent sticks across reloads. Only
+  // meaningful when the active language can show a phone simulator
+  // (RN / Swift); for everything else neither the popout nor the
+  // toggle is rendered.
+  const [floatingPhoneOpen, setFloatingPhoneOpen] = useState<boolean>(() => {
+    if (typeof localStorage === "undefined") return true;
+    const v = localStorage.getItem("fishbones:floating-phone-open");
+    if (v === null) return true;
+    return v === "true";
+  });
+  useEffect(() => {
+    if (typeof localStorage === "undefined") return;
+    localStorage.setItem(
+      "fishbones:floating-phone-open",
+      floatingPhoneOpen ? "true" : "false",
+    );
+  }, [floatingPhoneOpen]);
+
+  // Phone popout scope keyed on the active language so RN and Swift
+  // each have their own popout window + bus channel — a learner can
+  // flip between languages without one popout's content overwriting
+  // the other.
+  const phoneScope = `playground:${language}`;
+  const phoneBus = PHONE_VIEW_LANGUAGES.has(language)
+    ? makePhonePreviewBus(phoneScope)
+    : null;
+  // Close the popout when the user navigates away from a phone-
+  // eligible language so we don't leave a stale RN simulator open
+  // while they're editing Python. We re-open on the next Run for
+  // the new language anyway.
+  useEffect(() => {
+    return () => {
+      if (PHONE_VIEW_LANGUAGES.has(language)) {
+        void closePhonePopout(phoneScope);
+      }
+    };
+  }, [language, phoneScope]);
+
+  // Auto-flip the view mode when the user switches to / away from a
+  // phone-friendly language. Two distinct nudges:
+  //   1. Picking RN/Swift while still on the default `split` view →
+  //      jump straight into `phone` so the chrome is visible without
+  //      having to discover the segmented control.
+  //   2. Picking a non-phone language while in `phone` → fall back to
+  //      `split` because the phone option gets hidden underneath them
+  //      and we'd otherwise leave the user staring at an empty pane.
+  // Once the user manually picks a different mode after a language
+  // change, we stop nudging — the effect's dependencies only fire on
+  // language transitions so a manual `setViewMode("split")` while on
+  // RN sticks.
+  useEffect(() => {
+    if (PHONE_VIEW_LANGUAGES.has(language)) {
+      if (viewMode === "split") setViewMode("phone");
+    } else {
+      if (viewMode === "phone") setViewMode("split");
+    }
+    // Intentionally only depend on `language` — we don't want to
+    // re-fire when the user manually flips the view mode, only when
+    // the language transitions.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [language]);
+
+  // Filter the segmented-control options so the "Phone" pill only
+  // appears when the active language can use it. Avoids a dead pill
+  // for Python / Rust / etc.
+  const visibleViewModeOptions = VIEW_MODE_OPTIONS.filter(
+    (opt) => opt.id !== "phone" || PHONE_VIEW_LANGUAGES.has(language),
+  );
+
   const showEditor = viewMode !== "preview";
   const showOutput = viewMode !== "editor";
+  // Phone-eligible language in either `phone` or `split` view → render
+  // the floating-phone modal over a full-width editor instead of the
+  // old fixed right-pane phone stage. `editor` / `preview` view modes
+  // are explicit user requests to hide the simulator, so we don't
+  // override them by floating one in.
+  const useFloatingPhone =
+    PHONE_VIEW_LANGUAGES.has(language) &&
+    (viewMode === "phone" || viewMode === "split");
 
   // "Generate from a prompt" mini-form. Toggled by the Generate button
   // in the header; closes itself after submit. We keep the input local
@@ -276,26 +377,58 @@ export default function PlaygroundView() {
     }
     setRunning(true);
     setResult(null);
+    // Auto-pop the phone simulator open on every Run for a phone-
+    // eligible language. The popout window opens (or focuses, if
+    // already open); we also push a `running` marker so the popout
+    // shows a "running…" placeholder while the runtime works.
+    if (PHONE_VIEW_LANGUAGES.has(language)) {
+      setFloatingPhoneOpen(true);
+      void openPhonePopout(phoneScope, `Playground · ${language}`);
+      phoneBus?.emit({ type: "running" });
+    }
     try {
       const r = await runFiles(language, files);
       if (!r) {
+        const msg = `No runtime for language "${language}".`;
         setResult({
           logs: [],
-          error: `No runtime for language "${language}".`,
+          error: msg,
           durationMs: 0,
         });
+        if (PHONE_VIEW_LANGUAGES.has(language)) {
+          phoneBus?.emit({ type: "console", logs: [], error: msg });
+        }
         return;
       }
       setResult(r);
+      // Push the run outcome to the popped phone simulator. RN's
+      // self-hosted preview URL drives an iframe in the popout;
+      // Swift (and any RN run that didn't yield a previewUrl)
+      // renders its captured stdout/stderr in a console panel.
+      if (PHONE_VIEW_LANGUAGES.has(language)) {
+        if (language === "reactnative" && r.previewUrl) {
+          phoneBus?.emit({ type: "preview", url: r.previewUrl });
+        } else {
+          phoneBus?.emit({
+            type: "console",
+            logs: r.logs ?? [],
+            error: r.error,
+          });
+        }
+      }
       void isPassing; // silence unused import — the helper is part of
       // the public runtimes surface, we just don't need it for the
       // no-tests playground path.
     } catch (e) {
+      const errMsg = e instanceof Error ? (e.stack ?? e.message) : String(e);
       setResult({
         logs: [],
-        error: e instanceof Error ? (e.stack ?? e.message) : String(e),
+        error: errMsg,
         durationMs: 0,
       });
+      if (PHONE_VIEW_LANGUAGES.has(language)) {
+        phoneBus?.emit({ type: "console", logs: [], error: errMsg });
+      }
     } finally {
       setRunning(false);
     }
@@ -331,6 +464,12 @@ export default function PlaygroundView() {
     <OutputPane result={result} running={running} language={language} />
   );
 
+  // Build the body of the phone "screen" based on the active language.
+  // RN gets the live preview iframe (same URL the OutputPane card opens
+  // externally — embedded inline here so it reads as a device render);
+  // Swift gets a console-style log dump because the Swift runner only
+  // emits stdout/stderr. Anything else (the language picker is gated
+  // upstream so this is defensive) shows a placeholder.
   return (
     <div className="fishbones-playground">
       {/* Header: language picker on the left, view toggle on the right. */}
@@ -386,7 +525,7 @@ export default function PlaygroundView() {
           role="group"
           aria-label="View mode"
         >
-          {VIEW_MODE_OPTIONS.map((opt) => {
+          {visibleViewModeOptions.map((opt) => {
             const active = viewMode === opt.id;
             return (
               <button
@@ -470,7 +609,17 @@ export default function PlaygroundView() {
         )}
 
       <div className="fishbones-playground-workbench">
-        {showEditor && showOutput ? (
+        {useFloatingPhone ? (
+          // Floating-phone path: the editor takes the full pane width
+          // and the phone simulator overlays as a draggable modal
+          // (rendered below at the playground root). This replaces
+          // the old fixed right-pane phone stage for `phone` + `split`
+          // views on RN/Swift. `outputNode` isn't shown here because
+          // the floating phone IS the output surface — the user can
+          // still flip viewMode to `preview` to get the textual
+          // logs/error pane.
+          <div className="fishbones-playground-solo">{editorNode}</div>
+        ) : showEditor && showOutput ? (
           // Classic split — the Workbench card gives us the resize handle
           // and matches what courses use so switching between the two
           // doesn't rearrange muscle memory.
@@ -488,6 +637,39 @@ export default function PlaygroundView() {
           <div className="fishbones-playground-solo">{outputNode}</div>
         )}
       </div>
+
+      {/* Phone simulator popout toggle. The simulator itself lives
+          in a separate OS window (opened via `openPhonePopout`); the
+          button below offers the user a way to focus / re-open it.
+          We always render the toggle while we're on a phone-
+          eligible language because there's no reliable cross-
+          platform Tauri signal for "the user closed the popout
+          window OS-style", so the cheapest correct UX is "always
+          offer to re-open / focus". `openPhonePopout` is idempotent
+          — re-opening an already-open window just focuses it. */}
+      {useFloatingPhone && (
+        <PhoneToggleButton
+          onShow={() => {
+            setFloatingPhoneOpen(true);
+            void openPhonePopout(phoneScope, `Playground · ${language}`);
+            // Replay the latest result into a fresh popout so the
+            // window doesn't open empty after a Run already produced
+            // output. Mirrors the logic in handleRun() so the bus
+            // payload format stays identical.
+            if (result) {
+              if (language === "reactnative" && result.previewUrl) {
+                phoneBus?.emit({ type: "preview", url: result.previewUrl });
+              } else {
+                phoneBus?.emit({
+                  type: "console",
+                  logs: result.logs ?? [],
+                  error: result.error,
+                });
+              }
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

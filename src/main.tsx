@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import PoppedWorkbench from "./components/Workbench/PoppedWorkbench";
+import PhonePopoutView from "./components/PhonePopout/PhonePopoutView";
 import { applyTheme, loadTheme } from "./theme/themes";
 import "./theme/themes.css";
 import "./App.css";
@@ -10,17 +11,21 @@ import "./App.css";
 // default) before React mounts so we don't flash the wrong palette.
 applyTheme(loadTheme());
 
-// Two render modes out of a single bundle:
+// Three render modes out of a single bundle:
 // - default: full App (sidebar + reader + workbench)
-// - ?popped=1&course=…&lesson=…: standalone workbench only. Used by the
-//   pop-out window opened via window.open from the main window, so learners
-//   can drag the editor + console onto a second monitor.
+// - ?popped=1&course=…&lesson=…: standalone workbench only. Used by
+//   the pop-out window opened via window.open from the main window,
+//   so learners can drag the editor + console onto a second monitor.
+// - ?phone=1&scope=…: standalone phone simulator. Replaces the in-app
+//   FloatingPhone modal — RN previews now open in a separate OS
+//   window and the main editor pushes new preview URLs over a bus.
 const params = new URLSearchParams(window.location.search);
 const isPopped = params.get("popped") === "1";
+const isPhone = params.get("phone") === "1";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    {isPopped ? <PoppedWorkbench /> : <App />}
+    {isPhone ? <PhonePopoutView /> : isPopped ? <PoppedWorkbench /> : <App />}
   </React.StrictMode>,
 );
 

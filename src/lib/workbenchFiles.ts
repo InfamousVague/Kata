@@ -39,6 +39,38 @@ const LANG_DEFAULTS: Partial<Record<LanguageId, { name: string; language: FileLa
   // unfamiliar file tab. Now reveal-solution shows `App.js` with JS
   // highlighting (close enough to JSX at the workbench level).
   reactnative: { name: "App.js", language: "javascript" },
+  // Bun runs JS/TS at the syntax level — single-file Bun lessons land
+  // in `user.js` with JavaScript highlighting. Without this entry the
+  // editor was falling through to plaintext (visible in screenshots
+  // where Bun.password / Response / module.exports rendered as
+  // unhighlighted text). The course uses CommonJS (`module.exports`)
+  // for sandbox-test compatibility, so `.js` + `javascript` is the
+  // honest mapping.
+  bun: { name: "user.js", language: "javascript" },
+  // Svelte 5 single-file fallback. The Svelte 5 course usually ships
+  // multi-file `files` arrays; this is the safety net for any lesson
+  // that only has `starter` + `solution` strings. Uses our hand-rolled
+  // Monarch grammar registered in lib/monaco-svelte.ts.
+  svelte: { name: "App.svelte", language: "svelte" },
+  // SolidJS is JSX — Monaco's JS mode handles JSX syntax well enough
+  // for highlighting purposes (no dedicated `solid` Monarch grammar).
+  solid: { name: "App.jsx", language: "javascript" },
+  // HTMX lessons are HTML with hx-* attributes — html mode highlights
+  // them correctly.
+  htmx: { name: "index.html", language: "html" },
+  // Astro's frontmatter syntax (`---`) doesn't have a Monaco language;
+  // html mode handles the bulk of Astro markup acceptably and beats
+  // plaintext.
+  astro: { name: "Page.astro", language: "html" },
+  // Tauri lessons live in Rust (the #[tauri::command] surface), so
+  // single-file fallbacks land in `lib.rs` with rust highlighting.
+  tauri: { name: "lib.rs", language: "rust" },
+  // Solidity. Solidity has a dedicated FileLanguage entry so Monaco
+  // gets our hand-rolled Monarch grammar (registered in
+  // lib/monaco-setup.ts). Default filename is `Contract.sol` —
+  // matches the convention `solc` expects for a self-contained
+  // contract source.
+  solidity: { name: "Contract.sol", language: "solidity" },
 };
 
 /// Derive the editor's starting file set. When the lesson has explicit

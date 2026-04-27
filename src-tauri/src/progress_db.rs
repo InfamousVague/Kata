@@ -98,3 +98,32 @@ pub fn clear_completions(db: State<'_, ProgressDb>) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     Ok(())
 }
+
+#[tauri::command]
+pub fn clear_lesson_completion(
+    db: State<'_, ProgressDb>,
+    course_id: String,
+    lesson_id: String,
+) -> Result<(), String> {
+    let conn = db.0.lock().map_err(|_| "db mutex poisoned".to_string())?;
+    conn.execute(
+        "DELETE FROM completions WHERE course_id = ?1 AND lesson_id = ?2",
+        params![course_id, lesson_id],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn clear_course_completions(
+    db: State<'_, ProgressDb>,
+    course_id: String,
+) -> Result<(), String> {
+    let conn = db.0.lock().map_err(|_| "db mutex poisoned".to_string())?;
+    conn.execute(
+        "DELETE FROM completions WHERE course_id = ?1",
+        params![course_id],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}

@@ -1,6 +1,6 @@
-import { invoke } from "@tauri-apps/api/core";
 import type { WorkbenchFile } from "../data/types";
 import type { RunResult } from "./types";
+import { presentPreview } from "../lib/preview";
 
 /// React runtime — assembles an HTML shell that pulls in React +
 /// ReactDOM from esm.sh, transpiles the learner's JSX in-browser via
@@ -38,13 +38,7 @@ export async function runReact(files: WorkbenchFile[]): Promise<RunResult> {
 
   const html = buildPreviewHtml(source, css);
 
-  let previewUrl: string | undefined;
-  try {
-    const handle = await invoke<{ url: string }>("serve_web_preview", { html });
-    previewUrl = handle.url;
-  } catch {
-    previewUrl = undefined;
-  }
+  const previewUrl = await presentPreview(html);
 
   return {
     logs: [],
@@ -92,14 +86,17 @@ function buildPreviewHtml(userSource: string, userCss: string): string {
     }
 ${userCss}
   </style>
-  <script src="https://unpkg.com/@babel/standalone@7.24.0/babel.min.js"
-          crossorigin="anonymous"></script>
+  <!-- Vendored bundles served from the local Tauri preview server's
+       /vendor route. See scripts/vendor-cdn-deps.mjs for the build
+       step that produces them out of node_modules. -->
+  <script src="/vendor/babel.min.js"></script>
 </head>
 <body>
   <div id="root"></div>
   <script type="module">
-    import React from "https://esm.sh/react@18.2.0";
-    import { createRoot } from "https://esm.sh/react-dom@18.2.0/client";
+    import * as ReactMod from "/vendor/react.js";
+    import { createRoot } from "/vendor/react-dom-client.js";
+    const React = ReactMod.default || ReactMod;
 
     // Module top level can't \`return\` — wrap the whole runtime in an
     // IIFE so the early-exit-on-error pattern below works syntactically.

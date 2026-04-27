@@ -1,0 +1,35 @@
+/* Popped phone-simulator window. Fills its OS window with a
+   centered PhoneFrame — the OS chrome supplies the title bar +
+   close button, so no draggable header here (unlike the in-app
+   FloatingPhone we replaced). */
+
+.fishbones-phone-popout-root {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Match the page background of the host theme so the OS window
+     visually merges with the phone bezels. PhoneFrame.css carries
+     its own bezel gradient — we just need a clean canvas behind it. */
+  background: var(--color-bg-primary);
+  overflow: hidden;
+}
+
+/* The default `.fishbones-phone-frame-outer` has 12px padding around
+   the phone — fine when it's docked next to an editor pane, but here
+   the popout window IS the simulator, so we want zero gutter. The OS
+   window chrome already gives the user a comfortable 8-12px frame. */
+.fishbones-phone-popout-root .fishbones-phone-frame-outer {
+  padding: 0;
+}
+
+/* The default ceilings (max-width: 320px, max-height: 620px) were
+   sized for inline embedding inside the workbench. In its own OS
+   window we want the simulator to fill whatever space the user
+   gives us — drop the caps so it scales up on a wide / tall popout
+   window while still respecting the 9:19.5 aspect ratio. */
+.fishbones-phone-popout-root .fishbones-phone-frame {
+  max-width: none;
+  max-height: none;
+}

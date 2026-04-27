@@ -91,12 +91,15 @@
 /* In-app preview iframe wrapper. Sits at the top of the preview card
    so the rendered page is the first thing the learner sees. White
    background matches how most web pages render — the iframe draws
-   the user's actual background on top. */
+   the user's actual background on top. The wrapper has no border:
+   most rendered pages have their own white canvas, so the previous
+   1-px `--color-border-default` rim read as "weird white border"
+   floating around the preview against the dark workbench. The
+   border-radius alone clips the iframe cleanly. */
 .fishbones-output-preview-frame {
   margin: 0 0 12px;
   height: 360px;
   background: #ffffff;
-  border: 1px solid var(--color-border-default);
   border-radius: 6px;
   overflow: hidden;
 }

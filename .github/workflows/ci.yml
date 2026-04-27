@@ -1,0 +1,94 @@
+name: CI
+
+# Validates the web variant builds end-to-end on every PR + push to
+# main. Catches regressions before they break the marketing site's
+# deploy (mattssoftware/.github/workflows/deploy.yml pulls this repo
+# and runs `npm run build:web` — if it broke here, that deploy
+# breaks too).
+#
+# Desktop build (Tauri-bundled) isn't validated here — it requires
+# Rust + macOS for the .dmg path, which is slow on CI. Add a
+# separate `tauri-build.yml` if you want full desktop validation.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # Manual trigger so you can run CI on a stale branch without
+  # opening a PR.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Cancel older in-flight runs on the same branch so a quick
+# follow-up push doesn't waste a CI slot.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Web build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install deps
+        run: npm ci
+
+      # Cache the vendor-staging output so consecutive runs don't
+      # re-bundle Babel + React + Three.js + Svelte. Keyed off the
+      # vendor script and lockfile — change either and the cache
+      # invalidates correctly.
+      - name: Cache vendor assets
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/resources/vendor
+          key: vendor-${{ hashFiles('package-lock.json', 'scripts/vendor-cdn-deps.mjs') }}
+          restore-keys: |
+            vendor-
+
+      - name: Type-check
+        run: ./node_modules/.bin/tsc
+
+      - name: Build web variant
+        env:
+          FISHBONES_TARGET: web
+        # `build:web` chains: vendor (esbuild bundle) → vendor:web
+        # (copy to public/) → starter:web (extract bundled packs) →
+        # tsc → vite build. Whole pipeline runs here so any breakage
+        # in the chain shows up before deploy.
+        run: npm run build:web
+
+      - name: Verify web build output
+        run: |
+          # Smoke-check that the expected entry points landed.
+          # Catches accidental Vite config breaks (wrong base path,
+          # missing assets) without spinning up a real browser.
+          test -f dist-web/index.html || (echo "MISSING dist-web/index.html"; exit 1)
+          test -d dist-web/assets || (echo "MISSING dist-web/assets"; exit 1)
+          test -f dist-web/starter-courses/manifest.json || (echo "MISSING starter-courses manifest"; exit 1)
+          test -f dist-web/vendor/svelte-runtime.js || (echo "MISSING vendor/svelte-runtime.js"; exit 1)
+          # Confirm the base path is set — index.html should reference
+          # /fishbones/learn/assets/... when FISHBONES_TARGET=web is
+          # picked up correctly.
+          grep -q '/fishbones/learn/assets/' dist-web/index.html || \
+            (echo "index.html doesn't reference /fishbones/learn/ — Vite base config drift"; exit 1)
+          echo "Web build artefacts look healthy."
+
+      # Upload the build as an artifact so a maintainer can download
+      # it and inspect locally without re-running the build.
+      - name: Upload web build artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-web
+          path: dist-web
+          retention-days: 7

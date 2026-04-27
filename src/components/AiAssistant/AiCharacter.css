@@ -6,39 +6,45 @@
 
 .fishbones-ai-character {
   position: fixed;
-  right: 22px;
-  bottom: 22px;
+  right: 20px;
+  bottom: 20px;
   /* Above the top-bar (100) and sidebar (50), below full-screen
      modals (1000+). 90 keeps the button reachable while the user
      is in a lesson or the library. */
   z-index: 90;
-  /* Gradient ring is rendered via the wrapper's background; the
-     inner white face is a pseudo-element ::before. Padding sets
-     the ring thickness — small relative to the diameter so the
-     icon dominates and the ring reads as a thin halo. */
-  width: 64px;
-  height: 64px;
-  padding: 4px;
+  /* Sized between the original 64px (too prominent) and the first
+     pass at 44px (too small for the popup positioning maths to
+     anchor cleanly). 52px is the sweet spot — reads as a special
+     floating control without dominating the corner. */
+  width: 52px;
+  height: 52px;
+  padding: 3px;
   border: none;
   border-radius: 50%;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  /* Per-mood palette knobs read by the gradient layers. Mood
-     transitions only need to touch the palette + speed; the
-     geometry stays identical. */
-  --orb-c-left: #5cc1ff;   /* gradient origin (cool side) */
-  --orb-c-right: #b056ff;  /* gradient terminus (warm side) */
-  --orb-glow: rgba(124, 99, 255, 0.42);
-  --orb-shift: 16s;        /* gradient hue-rotation period */
+  /* Per-mood palette knobs. The ring picks up a saturated tint
+     from the streak/level/longest-streak colour vocabulary the rest
+     of the app uses so the orb reads as part of the family — but
+     stays vibrant enough to be a colourful glow against any theme.
+     The streaming / celebrating / alert moods still pick their own
+     loud palettes since those are intentional state signals. */
+  --orb-c-left: #b056ff;
+  --orb-c-right: #ff7eb6;
+  --orb-glow: rgba(176, 86, 255, 0.55);
+  --orb-shift: 22s;        /* gradient hue-rotation period */
   background:
     linear-gradient(135deg, var(--orb-c-left) 0%, var(--orb-c-right) 100%);
   box-shadow:
     /* Soft drop shadow grounds the button on the page. */
-    0 14px 24px -10px rgba(0, 0, 0, 0.45),
-    /* Coloured glow tinted by the active mood. */
-    0 0 36px -8px var(--orb-glow);
+    0 8px 18px -8px rgba(0, 0, 0, 0.4),
+    /* Saturated coloured glow — bigger spread, less black/white,
+       more hue. Two layers for depth: tight inner ring + larger
+       diffuse halo. */
+    0 0 12px -2px var(--orb-glow),
+    0 0 30px -2px var(--orb-glow);
   transition:
     transform 0.18s ease-out,
     box-shadow 0.25s ease-out,
@@ -94,64 +100,61 @@
   outline-offset: 4px;
 }
 
-/* Inner white face. ::before sits inside the padded ring and gets
-   a subtle inset shadow + radial highlight so it reads as a slightly
-   raised disc rather than a flat patch. `inset` matches the parent's
-   padding so the white face sits flush against the ring. */
+/* Inner face. Bright off-white disc regardless of theme — the user
+   wants the dark fishbones glyph to pop, which only works against a
+   high-contrast light face. The subtle inset shadow + radial
+   highlight gives it 3D depth. */
 .fishbones-ai-character::before {
   content: "";
   position: absolute;
-  inset: 4px;
+  inset: 3px;
   border-radius: 50%;
   background:
     radial-gradient(
       ellipse 60% 40% at 50% 25%,
       rgba(255, 255, 255, 1) 0%,
-      rgba(248, 248, 252, 1) 70%
+      rgba(244, 244, 250, 1) 70%
     );
-  /* Inset shadow on the bottom-right reads as the inner face being
-     pressed into the ring; the top-left highlight (via the radial
-     gradient above) completes the 3D feel. */
   box-shadow:
     inset 1px 2px 0 rgba(255, 255, 255, 0.95),
     inset -2px -3px 8px rgba(120, 110, 180, 0.18);
   pointer-events: none;
 }
 
-/* Fishbones glyph. Mask-image lets us re-color the same PNG via
-   `background` so dark/light theme tweaks work without shipping a
-   second asset. */
+/* Fishbones glyph — dark slate so it pops against the bright face,
+   regardless of theme. Mask-image lets us re-colour the same PNG
+   via `background` without shipping a second asset. */
 .fishbones-ai-character-icon {
   position: relative;
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 26px;
   background: #1f2330;
   -webkit-mask: url("/fishbones.png") no-repeat center / contain;
   mask: url("/fishbones.png") no-repeat center / contain;
   z-index: 2;
-  /* Tiny shadow under the glyph reinforces the "icon sits above the
-     surface" feel; mirrors the inset shadow direction on ::before. */
   filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.06));
 }
 
 
 /* ---- Mood palettes --------------------------------------------- */
 
-/* Idle — cyan→violet, gentle hue rotation. Matches the reference
-   button's resting palette. */
+/* Idle — saturated violet→pink halo. Same colour vocabulary as
+   the original cyan→violet but pushed warmer so it complements the
+   streak/level chrome elsewhere in the app. Slow hue rotation
+   keeps the orb gently alive. */
 .fishbones-ai-character--idle {
-  --orb-c-left: #5cc1ff;
-  --orb-c-right: #b056ff;
-  --orb-glow: rgba(124, 99, 255, 0.42);
-  --orb-shift: 18s;
+  --orb-c-left: #b056ff;
+  --orb-c-right: #ff7eb6;
+  --orb-glow: rgba(176, 86, 255, 0.55);
+  --orb-shift: 22s;
 }
 
-/* Streaming / "thinking" — same cool palette but pushed brighter
-   with a faster hue cycle, which reads as the button leaning in. */
+/* Streaming / "thinking" — push to a brighter, faster cycle so the
+   orb visibly leans in while a reply streams. */
 .fishbones-ai-character--streaming {
   --orb-c-left: #6dd6ff;
   --orb-c-right: #c46aff;
-  --orb-glow: rgba(180, 90, 255, 0.6);
+  --orb-glow: rgba(180, 90, 255, 0.7);
   --orb-shift: 5s;
 }
 

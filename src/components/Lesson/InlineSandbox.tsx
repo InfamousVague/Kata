@@ -1,17 +1,16 @@
+// Side-effect import: configures `@monaco-editor/react`'s loader to use
+// the locally-bundled Monaco instance + wires `self.MonacoEnvironment`
+// for worker spawning. Same import EditorPane uses; the file's
+// side-effects are idempotent so importing it from both places is safe
+// (modules are evaluated once per graph). See monaco-setup.ts.
+import "../../lib/monaco-setup";
 import { useMemo, useState } from "react";
-import Editor, { loader } from "@monaco-editor/react";
+import Editor from "@monaco-editor/react";
 import { runCode, type RunResult } from "../../runtimes";
 import { useActiveTheme } from "../../theme/useActiveTheme";
 import { MONACO_THEME_BY_APP_THEME } from "../../theme/monaco-themes";
 import type { LanguageId } from "../../data/types";
 import "./InlineSandbox.css";
-
-/// Monaco's CDN loader has already been configured by EditorPane; we
-/// piggy-back on the same init so the workers are shared. Calling
-/// `loader.config` a second time is a no-op if the same paths are
-/// supplied — we skip that here and just rely on EditorPane setting up
-/// the config before this component mounts.
-void loader;
 
 interface Props {
   /// Primary language the snippet runs in. Matches the fenced code

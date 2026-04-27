@@ -25,10 +25,17 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; script-src 'self' 'wasm-unsafe-eval' https://cdn.jsdelivr.net; connect-src 'self' https://cdn.jsdelivr.net https://play.rust-lang.org https://play.golang.org; font-src 'self' https://cdn.jsdelivr.net data:; img-src 'self' data: blob: asset: https://asset.localhost; media-src 'self' data: blob:;"
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; style-src-elem 'self' 'unsafe-inline'; style-src-attr 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' ipc: http://ipc.localhost https://ipc.localhost http://tauri.localhost https://tauri.localhost http://127.0.0.1:* http://localhost:* https://api.mattssoftware.com https://play.rust-lang.org https://play.golang.org; font-src 'self' data:; img-src 'self' data: blob: asset: https://asset.localhost tauri: http://tauri.localhost https://tauri.localhost; media-src 'self' data: blob:; worker-src 'self' blob:; child-src 'self' blob: http://127.0.0.1:* http://localhost:*; frame-src 'self' blob: http://127.0.0.1:* http://localhost:*;"
     }
   },
-  "plugins": {},
+  "plugins": {
+    "deep-link": {
+      "mobile": [],
+      "desktop": {
+        "schemes": ["fishbones"]
+      }
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",
@@ -39,7 +46,11 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": ["resources/bundled-packs/*"],
+    "resources": [
+      "resources/bundled-packs/*",
+      "resources/vendor/*",
+      "resources/node/**/*"
+    ],
     "macOS": {
       "frameworks": [],
       "exceptionDomain": null,

@@ -1,6 +1,6 @@
-import { invoke } from "@tauri-apps/api/core";
 import type { WorkbenchAsset, WorkbenchFile } from "../data/types";
 import type { RunResult, LogLine, TestResult } from "./types";
+import { presentPreview } from "../lib/preview";
 
 /// Web runtime — assembles an HTML document from the user's files and
 /// ships it to the Tauri-side preview server, returning a URL the user
@@ -135,19 +135,10 @@ ${scriptBlock}
     ? await runTestsInHiddenIframe(doc, testCode)
     : null;
 
-  // Push the assembled document to the Tauri-side preview server. On
-  // the web-dev build (no Tauri host) the invoke rejects — that's fine,
-  // we just skip the URL and the OutputPane falls back to showing logs
-  // only. Don't surface that as a user-visible error.
-  let previewUrl: string | undefined;
-  try {
-    const handle = await invoke<{ url: string }>("serve_web_preview", {
-      html: doc,
-    });
-    previewUrl = handle.url;
-  } catch {
-    previewUrl = undefined;
-  }
+  // Push the assembled document into either the Tauri preview server
+  // (desktop) or a blob: URL (web). Falls back to undefined on
+  // failure so the OutputPane just shows logs without an iframe.
+  const previewUrl = await presentPreview(doc);
 
   const logs: LogLine[] = testResults?.logs ?? [];
   return {

@@ -2,16 +2,18 @@ import type { RunResult, LogLine, TestResult } from "./types";
 
 /// Python via Pyodide (CPython compiled to WASM).
 ///
-/// Pyodide is large (~10MB) so we lazy-load it from jsDelivr inside a
-/// dedicated worker, cache it on the worker global, and reuse the same
-/// worker across runs. First run takes ~3–5s; subsequent runs are instant.
+/// Pyodide is large (~12MB) and ships fully vendored under
+/// `public/pyodide/` — Vite serves it same-origin, the Tauri bundle
+/// ships it as part of the dist, and the worker `importScripts` it
+/// from a relative path. No CDN traffic. First run takes ~3–5s while
+/// the worker spins up + Pyodide initializes; subsequent runs are
+/// instant because the same worker stays warm.
 ///
 /// Test harness mirrors the JS one: user code is exec'd first into a
 /// module-like namespace; if test code is present, a tiny Python harness
 /// (`test(name, fn)` + `expect(x)` with `.to_be`, `.to_equal`, ...) gets
 /// injected and runs the test file in a namespace that can `from user import X`.
 
-const PYODIDE_VERSION = "0.26.2";
 const TIMEOUT_MS = 15000; // Pyodide cold start can be slow
 
 let workerPromise: Promise<Worker> | null = null;
@@ -20,10 +22,27 @@ let workerPromise: Promise<Worker> | null = null;
 function getWorker(): Promise<Worker> {
   if (workerPromise) return workerPromise;
 
+  // Resolve `/pyodide/pyodide.js` against the page origin so the
+  // worker's importScripts (which has its own origin) targets the
+  // SAME absolute URL the main thread would have used. Without this
+  // an importScripts('/pyodide/pyodide.js') from a Blob-URL worker
+  // would resolve relative to the blob: scheme and 404 instantly.
+  const pyodideUrl = new URL(
+    "/pyodide/pyodide.js",
+    window.location.origin,
+  ).toString();
+  const pyodideRoot = new URL(
+    "/pyodide/",
+    window.location.origin,
+  ).toString();
+
   const workerSource = `
-    importScripts('https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/pyodide.js');
+    importScripts(${JSON.stringify(pyodideUrl)});
     let pyodideReady = (async () => {
-      self.pyodide = await self.loadPyodide();
+      // indexURL tells Pyodide where to fetch its packages, lock file,
+      // and side files. Pin to the same vendored root we loaded
+      // pyodide.js from so the wasm + lock all come from /pyodide/.
+      self.pyodide = await self.loadPyodide({ indexURL: ${JSON.stringify(pyodideRoot)} });
     })();
 
     self.onmessage = async (e) => {

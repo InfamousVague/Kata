@@ -10,6 +10,7 @@ import { panelLeftOpen } from "@base/primitives/icon/icons/panel-left-open";
 import "@base/primitives/icon/icon.css";
 import type { StreakAndXp } from "../../hooks/useStreakAndXp";
 import { ProgressRing } from "../Shared/ProgressRing";
+import LanguageChip from "../LanguageChip/LanguageChip";
 import "./TopBar.css";
 
 /// Semantic color tokens for the stats chips. Each row's uppercase label
@@ -33,8 +34,10 @@ interface Props {
   onActivate: (index: number) => void;
   onClose: (index: number) => void;
   /// Learner's current streak + XP. Combined into a single trigger chip
-  /// in the top bar — click to expand a detail dropdown. Hidden entirely
-  /// when the learner hasn't completed anything yet.
+  /// in the top bar — click to expand a detail dropdown. The chip is
+  /// always rendered (even at level 1 / 0 streak) because the dropdown
+  /// is also where unauthenticated learners pick up the cloud-sync
+  /// sign-in CTA — hiding it would orphan that path.
   stats?: StreakAndXp;
   /// Called when the "View Profile" button at the bottom of the stats
   /// dropdown is clicked. Routes the main pane to the Profile view.
@@ -46,6 +49,21 @@ interface Props {
   /// Toggles sidebar visibility. Also mapped to Cmd/Ctrl+\ at the app
   /// level, but the button gives learners an obvious, discoverable path.
   onToggleSidebar?: () => void;
+
+  /// Cloud-sync auth state, surfaced in the dropdown's account row.
+  /// `signedIn=false` shows a "Sign in" button next to "View profile";
+  /// `signedIn=true` shows the user identity + a "Sign out" link.
+  /// Pass `undefined` (or omit) to hide the account row entirely —
+  /// useful for embeds / non-Tauri builds where cloud isn't wired.
+  signedIn?: boolean;
+  userDisplayName?: string | null;
+  userEmail?: string | null;
+  /// Opens the sign-in modal. Only invoked when `signedIn === false`.
+  onSignIn?: () => void;
+  /// Best-effort logout (revokes the token server-side and clears local
+  /// cache). Errors are swallowed in the hook; the chip just goes back
+  /// to the signed-out state.
+  onSignOut?: () => void;
 }
 
 /// Custom window top bar. The window is configured with
@@ -62,8 +80,16 @@ export default function TopBar({
   onOpenProfile,
   sidebarCollapsed = false,
   onToggleSidebar,
+  signedIn,
+  userDisplayName,
+  userEmail,
+  onSignIn,
+  onSignOut,
 }: Props) {
-  const showStats = !!stats && stats.lessonsCompleted > 0;
+  // Always show the chip when stats are wired — the dropdown carries
+  // both the level/streak detail and the cloud-sync sign-in path, so
+  // hiding it for fresh learners would orphan the latter.
+  const showStats = !!stats;
 
   return (
     <div className="fishbones__topbar" data-tauri-drag-region>
@@ -103,7 +129,12 @@ export default function TopBar({
             className={`fishbones__tab ${i === activeIndex ? "fishbones__tab--active" : ""}`}
             onClick={() => onActivate(i)}
           >
-            <span className="fishbones__tab-lang">{langBadge(tab.language)}</span>
+            <LanguageChip
+              language={tab.language}
+              size="xs"
+              iconOnly
+              className="fishbones__tab-lang"
+            />
             <span className="fishbones__tab-label">{tab.label}</span>
             <span
               className="fishbones__tab-close"
@@ -121,7 +152,15 @@ export default function TopBar({
 
       <div className="fishbones__topbar-actions">
         {showStats && (
-          <StatsChip stats={stats!} onOpenProfile={onOpenProfile} />
+          <StatsChip
+            stats={stats!}
+            onOpenProfile={onOpenProfile}
+            signedIn={signedIn}
+            userDisplayName={userDisplayName}
+            userEmail={userEmail}
+            onSignIn={onSignIn}
+            onSignOut={onSignOut}
+          />
         )}
       </div>
     </div>
@@ -130,13 +169,24 @@ export default function TopBar({
 
 /// Combined streak + level chip with a dropdown detail panel. Chip shows
 /// streak flame + a small circular progress ring whose fill is XP-into-
-/// current-level. Clicking expands a panel with the full numbers.
+/// current-level. Clicking expands a panel with the full numbers AND the
+/// account row (sign-in / sign-out).
 function StatsChip({
   stats,
   onOpenProfile,
+  signedIn,
+  userDisplayName,
+  userEmail,
+  onSignIn,
+  onSignOut,
 }: {
   stats: StreakAndXp;
   onOpenProfile?: () => void;
+  signedIn?: boolean;
+  userDisplayName?: string | null;
+  userEmail?: string | null;
+  onSignIn?: () => void;
+  onSignOut?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -197,6 +247,12 @@ function StatsChip({
 
       {open && (
         <div className="fishbones__topbar-stats-panel" role="dialog" aria-label="Progress stats">
+          {/* Hero row. The ring's centre already shows the level
+              number, so the right-hand body promotes the SIGNED-IN
+              identity (name + email) instead of duplicating "Level N"
+              as a heading. When the learner is signed out, we fall
+              back to a plain Level heading so the row still has
+              something to anchor against the ring. */}
           <div className="fishbones__topbar-stats-hero">
             <ProgressRing
               progress={levelProgress}
@@ -206,10 +262,23 @@ function StatsChip({
               sublabel="level"
             />
             <div className="fishbones__topbar-stats-hero-body">
-              <div className="fishbones__topbar-stats-heading">Level {stats.level}</div>
-              <div className="fishbones__topbar-stats-sub">
-                {stats.xpIntoLevel} / {stats.xpForLevel} XP
-              </div>
+              {signedIn === true && (userDisplayName?.trim() || userEmail) ? (
+                <>
+                  <div className="fishbones__topbar-stats-heading">
+                    {userDisplayName?.trim() || userEmail}
+                  </div>
+                  {userEmail && userDisplayName?.trim() && (
+                    <div className="fishbones__topbar-stats-sub">{userEmail}</div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="fishbones__topbar-stats-heading">Level {stats.level}</div>
+                  <div className="fishbones__topbar-stats-sub">
+                    {stats.xpIntoLevel} / {stats.xpForLevel} XP
+                  </div>
+                </>
+              )}
               <div className="fishbones__topbar-stats-to-next">
                 {xpToNext === 0
                   ? "Ready to level up — complete any lesson!"
@@ -259,10 +328,79 @@ function StatsChip({
             />
           </div>
 
-          {/* Full-width CTA anchoring the bottom of the popup. Dropping into
-              the Profile view gives the learner a natural "show me the
-              full story" escape hatch after skimming the summary above. */}
-          {onOpenProfile && (
+          {/* Account row + View-profile CTA, anchored to the bottom of
+              the popup. When the learner is signed out, "Sign in"
+              becomes the primary call-to-action and "View profile"
+              steps down to a secondary outline; when they're signed in,
+              the identity + a quiet "Sign out" link replaces the row
+              and "View profile" goes back to primary. */}
+          {signedIn === false && onSignIn && (
+            <div className="fishbones__topbar-stats-account">
+              <div className="fishbones__topbar-stats-account-row">
+                <button
+                  type="button"
+                  className="fishbones__topbar-stats-signin"
+                  onClick={() => {
+                    setOpen(false);
+                    onSignIn();
+                  }}
+                >
+                  Sign in
+                </button>
+                {onOpenProfile && (
+                  <button
+                    type="button"
+                    className="fishbones__topbar-stats-view-profile fishbones__topbar-stats-view-profile--secondary"
+                    onClick={() => {
+                      setOpen(false);
+                      onOpenProfile();
+                    }}
+                  >
+                    View profile
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {signedIn === true && (
+            <div className="fishbones__topbar-stats-account">
+              {/* Identity card removed from this row — the hero block
+                  above promotes name + email next to the level ring,
+                  so duplicating it here was just visual noise. */}
+              <div className="fishbones__topbar-stats-account-row">
+                {onOpenProfile && (
+                  <button
+                    type="button"
+                    className="fishbones__topbar-stats-view-profile"
+                    onClick={() => {
+                      setOpen(false);
+                      onOpenProfile();
+                    }}
+                  >
+                    View profile
+                  </button>
+                )}
+                {onSignOut && (
+                  <button
+                    type="button"
+                    className="fishbones__topbar-stats-signout"
+                    onClick={() => {
+                      setOpen(false);
+                      onSignOut();
+                    }}
+                  >
+                    Sign out
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Fallback for embeds that don't wire `signedIn` at all —
+              keeps the old single-CTA shape so non-Tauri builds aren't
+              broken. */}
+          {signedIn === undefined && onOpenProfile && (
             <button
               type="button"
               className="fishbones__topbar-stats-view-profile"
@@ -310,20 +448,3 @@ function StatBlock({
   );
 }
 
-function langBadge(language: string): string {
-  switch (language) {
-    case "javascript":
-    case "typescript":
-      return "JS";
-    case "python":
-      return "PY";
-    case "rust":
-      return "RS";
-    case "swift":
-      return "SW";
-    case "go":
-      return "GO";
-    default:
-      return language.slice(0, 2).toUpperCase();
-  }
-}

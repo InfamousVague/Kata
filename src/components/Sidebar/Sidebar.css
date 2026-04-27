@@ -22,6 +22,114 @@
   overflow-y: auto;
 }
 
+/* Docs-mode body — replaces .fishbones__nav when the user is on the
+   docs route. Same scroll behaviour as the course nav (flex: 1 +
+   overflow-y) so the sidebar height budget works the same way; the
+   inner section list spaces sections farther apart than the chapter
+   tree does, since each section is a flat list of links rather than
+   a disclosure-toggle tree. */
+.fishbones__docs-nav {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 10px 0;
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.fishbones__docs-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-bg-primary);
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+}
+
+.fishbones__docs-search input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  min-width: 0;
+}
+.fishbones__docs-search input::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.fishbones__docs-nav-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 0 0 24px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.fishbones__docs-nav-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fishbones__docs-nav-section-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  padding: 4px 8px 4px;
+}
+
+.fishbones__docs-nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.fishbones__docs-nav-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 12.5px;
+  font-family: inherit;
+  padding: 5px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: 1.4;
+  transition: background-color 0.1s ease, color 0.1s ease;
+}
+.fishbones__docs-nav-item:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+}
+.fishbones__docs-nav-item--active {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.fishbones__docs-nav-empty {
+  padding: 16px 8px;
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  text-align: center;
+}
+
 .fishbones__nav-item {
   display: flex;
   align-items: center;
@@ -78,6 +186,10 @@
 }
 
 .fishbones__course--compact {
+  /* Slightly more breathing room between collapsed cards so the rows
+     stop reading as a flat list. The hover tint (below) plus this gap
+     gives each course a sense of being its own clickable card without
+     committing to a heavy border treatment. */
   margin-bottom: 2px;
 }
 
@@ -123,8 +235,17 @@
 }
 
 .fishbones__course-row:hover {
-  background: var(--color-bg-tertiary);
+  background: var(--color-bg-secondary);
   color: var(--color-text-primary);
+}
+
+/* Light themes: bg-secondary IS the sidebar surface, so hovering with
+   it produces no contrast. Bump to bg-tertiary on hover for those
+   themes so the row still reads as interactive. */
+[data-theme-name="default-light"] .fishbones__course-row:hover,
+[data-theme-name="ayu-light"] .fishbones__course-row:hover,
+[data-theme-name="catppuccin-latte"] .fishbones__course-row:hover {
+  background: var(--color-bg-tertiary);
 }
 
 .fishbones__course-row-caret {
@@ -144,6 +265,38 @@
   color: var(--color-text-tertiary);
   flex-shrink: 0;
   margin-left: 8px;
+}
+
+/* Tiny ring at the trailing edge of the inactive course row. Replaces
+   the bare "x/y" text — gives a glance-able visual of how far in the
+   learner is without dedicating a column for digits. The text variant
+   was kept above for any callers still using it. */
+.fishbones__course-row-ring {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+/* Larger ring on the active course card. Sits to the right of the
+   title row alongside the language chip + name. The ring shows the
+   "x/y" count inside its own centre label, so we don't need a
+   separate text element for progress on the active card either. */
+.fishbones__course-ring {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+/* Inside the active card the centre label needs to read smaller than
+   the default 11px because we're squeezing "12/45" into a 28px ring.
+   Tabular nums + tighter tracking lets the digits not collide. */
+.fishbones__course-ring .fishbones__progress-ring-label {
+  font-size: 8.5px;
+  letter-spacing: -0.04em;
 }
 
 /* Course header card. Slightly elevated surface with a border so the
@@ -264,34 +417,158 @@
   transition: width 0.3s ease;
 }
 
-/* Expanded body: chapters + export button. Indented slightly so visually
-   it reads as "contents of the card above". */
+/* Expanded body: chapter list. Slightly inset from the parent course
+   card with a subtle left guide line so the chapters read as
+   "belonging to" the course above rather than as siblings of it. */
 .fishbones__course-body {
   display: flex;
   flex-direction: column;
+  gap: 2px;
+  padding: 6px 0 4px 6px;
+  margin-left: 4px;
+  border-left: 1px solid var(--color-border-default);
+}
+
+/* Section group — wraps a contiguous run of chapters that share an
+   `X · ` prefix (e.g. all "Basic Svelte" chapters). One disclosure
+   tier ABOVE chapter so the visual hierarchy reads
+   course → section → chapter → lesson when sections are present, and
+   collapses cleanly to course → chapter → lesson when they're not. */
+.fishbones__section {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 0;
+}
+
+.fishbones__section-title {
+  display: flex;
+  align-items: center;
   gap: 6px;
-  padding: 10px 0 4px 6px;
+  width: 100%;
+  padding: 6px 8px 6px 6px;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  /* Slightly louder than chapter-title so the eye lands on section
+     headers first when scanning a long course outline. */
+  color: var(--color-text-primary);
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.fishbones__section-title:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.fishbones__section-caret {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+}
+
+.fishbones__section-title-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fishbones__section-ring {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-left: 6px;
+}
+
+/* Nested chapter list under an open section. Indented + bordered the
+   same way `.fishbones__course-body` is, so the disclosure-depth
+   metaphor stays consistent: each level slides one notch right and
+   gets a soft vertical guide. */
+.fishbones__section-children {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 2px 0 4px 8px;
+  margin-left: 4px;
+  border-left: 1px solid var(--color-border-default);
+  animation: fishbones-chapter-open 150ms ease-out;
 }
 
 .fishbones__chapter {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 2px 0 4px 0;
+  gap: 1px;
+  padding: 0;
 }
 
+/* Chapter header is now a clickable button (chevron + title + ring)
+   that toggles the lesson list below. Subordinate to the course it
+   belongs to: smaller font, slightly muted colour, gentle hover tint
+   that signals "this row is interactive" without competing with the
+   parent course card. */
 .fishbones__chapter-title {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 6px 12px 4px 14px;
-  color: var(--color-text-tertiary);
-  font-size: 10px;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 8px 5px 6px;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--color-text-secondary);
+  font-family: inherit;
+  font-size: 11.5px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
+  letter-spacing: 0.1px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
+.fishbones__chapter-title:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+}
+
+.fishbones__chapter-caret {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  color: var(--color-text-tertiary);
+}
+
+.fishbones__chapter-title-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fishbones__chapter-ring {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-left: 6px;
+}
+
+/* Legacy text-progress class — kept around so any older callers still
+   render a sensible look even though the chapter header now leads with
+   the ring. */
 .fishbones__chapter-progress {
   font-size: 10px;
   font-variant-numeric: tabular-nums;
@@ -300,8 +577,33 @@
   letter-spacing: 0;
 }
 
+/* Lesson list — most subordinate level in the tree. Inset further
+   beyond the chapter header and given a slightly smaller font so the
+   visual hierarchy course → chapter → lesson reads at a glance. The
+   short open/close height transition keeps disclosure snappy without
+   feeling abrupt. */
+.fishbones__chapter-lessons {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 2px 0 4px 8px;
+  animation: fishbones-chapter-open 150ms ease-out;
+}
+
+@keyframes fishbones-chapter-open {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .fishbones__lesson-item {
-  padding: 7px 12px 7px 14px;
+  padding: 6px 10px 6px 8px;
+  font-size: 12.5px;
   font-weight: 500;
   gap: 8px;
 }
@@ -491,6 +793,53 @@
 
 .fishbones__nav-section--packs {
   color: #c79bff; /* matches the profile "longest streak" accent — both are "you did this" trophies */
+}
+
+/* Empty state shown when the learner hasn't started any course yet —
+   the sidebar's "your bench" framing means an unbaked install would
+   otherwise show no list at all. CTA routes them straight to the
+   Library where new courses come from. */
+.fishbones__nav-empty {
+  margin: 12px 12px 0;
+  padding: 16px 14px;
+  background: var(--color-bg-secondary);
+  border: 1px dashed var(--color-border-default);
+  border-radius: 10px;
+  text-align: center;
+}
+
+.fishbones__nav-empty-headline {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.fishbones__nav-empty-body {
+  margin: 0 0 12px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--color-text-secondary);
+}
+
+.fishbones__nav-empty-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  background: var(--color-text-primary);
+  color: var(--color-bg-primary);
+  border: 0;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.1px;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+.fishbones__nav-empty-cta:hover {
+  opacity: 0.9;
 }
 
 .fishbones__nav-section-icon {

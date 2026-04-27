@@ -4,6 +4,7 @@ import { chevronRight } from "@base/primitives/icon/icons/chevron-right";
 import { chevronDown } from "@base/primitives/icon/icons/chevron-down";
 import { bookOpen } from "@base/primitives/icon/icons/book-open";
 import { code as codeIcon } from "@base/primitives/icon/icons/code";
+import { fileText } from "@base/primitives/icon/icons/file-text";
 import { helpCircle } from "@base/primitives/icon/icons/help-circle";
 import { libraryBig } from "@base/primitives/icon/icons/library-big";
 import { settings as settingsIcon } from "@base/primitives/icon/icons/settings";
@@ -11,10 +12,15 @@ import { download as downloadIcon } from "@base/primitives/icon/icons/download";
 import { x as xIcon } from "@base/primitives/icon/icons/x";
 import { terminal as terminalIcon } from "@base/primitives/icon/icons/terminal";
 import { swords } from "@base/primitives/icon/icons/swords";
+import { rotateCcw } from "@base/primitives/icon/icons/rotate-ccw";
+import { search as searchIcon } from "@base/primitives/icon/icons/search";
 import "@base/primitives/icon/icon.css";
 import type { Course, Chapter, Lesson, LanguageId } from "../../data/types";
 import { isChallengePack } from "../../data/types";
 import { useCourseCover } from "../../hooks/useCourseCover";
+import LanguageChip from "../LanguageChip/LanguageChip";
+import { ProgressRing } from "../Shared/ProgressRing";
+import { FISHBONES_DOCS } from "../../docs/pages";
 import "./Sidebar.css";
 
 /// Display name for a language id. Used by the "Rust challenges" style
@@ -54,6 +60,20 @@ function languageLabel(lang: LanguageId): string {
       return "C#";
     case "assembly":
       return "Assembly";
+    case "svelte":
+      return "Svelte";
+    case "solid":
+      return "SolidJS";
+    case "htmx":
+      return "HTMX";
+    case "astro":
+      return "Astro";
+    case "bun":
+      return "Bun";
+    case "tauri":
+      return "Tauri";
+    case "solidity":
+      return "Solidity";
   }
 }
 
@@ -93,15 +113,41 @@ interface Props {
   onSettings: () => void;
   /// Playground route — free-form coding sandbox, jsfiddle-style.
   onPlayground?: () => void;
+  /// Docs route — in-app documentation. Optional so embeddings of the
+  /// sidebar without a docs pane (e.g. the popped-out workbench window)
+  /// don't grow a dead chip.
+  onDocs?: () => void;
+  /// When `activeView === "docs"`, the sidebar swaps its course tree
+  /// for a docs-page nav driven by this id. Lifted from App-level so
+  /// the same state drives both the sidebar list and DocsView's main
+  /// pane — without it the user would see two separate sidebars.
+  /// Undefined means "not in docs mode" and the sidebar renders the
+  /// regular course tree.
+  docsActiveId?: string;
+  /// Called when the user clicks a docs page in the sidebar nav.
+  /// App.tsx forwards this to its `setDocsActiveId` so DocsView
+  /// re-renders with the new page. Optional so callers without docs
+  /// support don't have to wire it up.
+  onDocsSelect?: (pageId: string) => void;
   /// Which main-pane destination is currently showing. Used ONLY to draw
   /// an active state on the matching icon chip; clicking a chip calls
   /// its callback and lets the parent manage the state transition.
   /// "profile" stays a valid destination even though it's no longer in
   /// the sidebar — the top-bar streak pill's "View profile" CTA sets it.
-  activeView?: "courses" | "profile" | "playground" | "library";
+  activeView?: "courses" | "profile" | "playground" | "library" | "docs";
   onExportCourse?: (courseId: string, courseTitle: string) => void;
   onDeleteCourse?: (courseId: string, courseTitle: string) => void;
   onCourseSettings?: (courseId: string) => void;
+  /// Wipe a single lesson's completion. Surfaced via the lesson row's
+  /// right-click menu when the lesson is currently marked complete.
+  onResetLesson?: (courseId: string, lessonId: string) => void;
+  /// Wipe every completion in a chapter. The sidebar passes the chapter's
+  /// lesson_ids since completions are stored flat per-lesson (no chapter id
+  /// in the schema).
+  onResetChapter?: (courseId: string, lessonIds: string[]) => void;
+  /// Wipe every completion in a course. Reachable from the course
+  /// right-click menu (sits between Export and Delete).
+  onResetCourse?: (courseId: string) => void;
 }
 
 /// Floating left rail. Completion dots fill in as lessons get marked done
@@ -118,10 +164,16 @@ export default function Sidebar({
   onLibrary,
   onSettings,
   onPlayground,
+  onDocs,
+  docsActiveId,
+  onDocsSelect,
   activeView = "courses",
   onExportCourse,
   onDeleteCourse,
   onCourseSettings,
+  onResetLesson,
+  onResetChapter,
+  onResetCourse,
 }: Props) {
   /// Open context menu state, positioned at the cursor when a course card
   /// is right-clicked. One menu at a time across the sidebar — opening a
@@ -134,9 +186,39 @@ export default function Sidebar({
     y: number;
   } | null>(null);
 
+  /// Same shape, separate state slot for the chapter right-click menu —
+  /// the data shape differs (chapter title, lesson_ids) so reusing `menu`
+  /// would mean a discriminated union. A second slot is simpler.
+  const [chapterMenu, setChapterMenu] = useState<{
+    courseId: string;
+    chapterTitle: string;
+    lessonIds: string[];
+    x: number;
+    y: number;
+  } | null>(null);
+
+  /// Lesson right-click menu. Only opened for completed lessons (the only
+  /// V1 action is "mark incomplete"); incomplete lessons skip the menu
+  /// entirely so the learner doesn't see an empty popover.
+  const [lessonMenu, setLessonMenu] = useState<{
+    courseId: string;
+    lessonId: string;
+    lessonTitle: string;
+    x: number;
+    y: number;
+  } | null>(null);
+
   useEffect(() => {
-    if (!menu) return;
-    const close = () => setMenu(null);
+    // One shared close path so a click anywhere outside (or Escape) drops
+    // whichever of the three menus is open. Only attach the listeners
+    // when something IS open — saves a no-op listener on every render.
+    const anyOpen = menu || chapterMenu || lessonMenu;
+    if (!anyOpen) return;
+    const close = () => {
+      setMenu(null);
+      setChapterMenu(null);
+      setLessonMenu(null);
+    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") close();
     };
@@ -149,7 +231,7 @@ export default function Sidebar({
       window.removeEventListener("click", close);
       window.removeEventListener("keydown", onKey);
     };
-  }, [menu]);
+  }, [menu, chapterMenu, lessonMenu]);
 
   return (
     <aside className="fishbones__sidebar">
@@ -168,8 +250,10 @@ export default function Sidebar({
           contexts. Horizontally scrollable row of cover thumbnails,
           newest-activity first. Hidden when there's 0 or 1 course
           (nothing to switch between). Clicking a thumbnail jumps to
-          the course — the parent resolves which lesson to resume. */}
-      {onSelectCourse && (
+          the course — the parent resolves which lesson to resume.
+          Also hidden when the sidebar is in docs mode — the rail
+          becomes the docs nav, so a course-switcher would be noise. */}
+      {activeView !== "docs" && onSelectCourse && (
         <CourseCarousel
           courses={courses}
           recents={recents}
@@ -211,6 +295,14 @@ export default function Sidebar({
             active={activeView === "playground"}
           />
         )}
+        {onDocs && (
+          <SidebarNavItem
+            icon={fileText}
+            label="Docs"
+            onClick={onDocs}
+            active={activeView === "docs"}
+          />
+        )}
         <SidebarNavItem
           icon={settingsIcon}
           label="Settings"
@@ -218,6 +310,12 @@ export default function Sidebar({
         />
       </div>
 
+      {activeView === "docs" ? (
+        <DocsSidebarNav
+          activeId={docsActiveId}
+          onSelect={onDocsSelect}
+        />
+      ) : (
       <nav className="fishbones__nav">
         {(() => {
           // Partition into books vs challenge packs so they render under
@@ -238,12 +336,44 @@ export default function Sidebar({
               completed={completed}
               onSelectLesson={onSelectLesson}
               onContextMenu={
-                onExportCourse || onDeleteCourse || onCourseSettings
+                onExportCourse || onDeleteCourse || onCourseSettings || onResetCourse
                   ? (e: React.MouseEvent) => {
                       e.preventDefault();
                       setMenu({
                         courseId: course.id,
                         courseTitle: course.title,
+                        x: e.clientX,
+                        y: e.clientY,
+                      });
+                    }
+                  : undefined
+              }
+              onChapterContextMenu={
+                onResetChapter
+                  ? (chapter, e) => {
+                      e.preventDefault();
+                      setChapterMenu({
+                        courseId: course.id,
+                        chapterTitle: chapter.title,
+                        lessonIds: chapter.lessons.map((l) => l.id),
+                        x: e.clientX,
+                        y: e.clientY,
+                      });
+                    }
+                  : undefined
+              }
+              onLessonContextMenu={
+                onResetLesson
+                  ? (lesson, isCompleted, e) => {
+                      // Skip the menu entirely for not-yet-completed
+                      // lessons — the only V1 action is reset, and
+                      // there's nothing to reset.
+                      if (!isCompleted) return;
+                      e.preventDefault();
+                      setLessonMenu({
+                        courseId: course.id,
+                        lessonId: lesson.id,
+                        lessonTitle: lesson.title,
                         x: e.clientX,
                         y: e.clientY,
                       });
@@ -265,14 +395,38 @@ export default function Sidebar({
           // normal sections so the learner can pick.
           const activeCourse =
             courses.find((c) => c.id === activeCourseId) ?? null;
-          const inactiveBooks = books.filter((c) => c.id !== activeCourseId);
-          const inactivePacks = packs.filter((c) => c.id !== activeCourseId);
+
+          // The sidebar is the LEARNER'S BENCH — only show courses the
+          // learner has touched (≥1 completed lesson). Untouched courses
+          // live on the Library page where the learner goes to *find new
+          // things*. Without this filter, a bundled-pack-heavy install
+          // dumps 24 sections into the sidebar and turns a working
+          // surface into a discovery surface. The active course is an
+          // exception — if you JUST opened a course, we want it visible
+          // in "Current" even though completion is still 0.
+          const isStarted = (c: Course): boolean =>
+            c.chapters.some((ch) =>
+              ch.lessons.some((l) => completed.has(`${c.id}:${l.id}`)),
+            );
+
+          const inactiveBooks = books.filter(
+            (c) => c.id !== activeCourseId && isStarted(c),
+          );
+          const inactivePacks = packs.filter(
+            (c) => c.id !== activeCourseId && isStarted(c),
+          );
 
           // Language-filtered packs when focused on a course. We match
           // the pack's primary language to the active course's language.
           const relevantPacks = activeCourse
             ? inactivePacks.filter((p) => p.language === activeCourse.language)
             : inactivePacks;
+
+          // Empty state: no started courses AND no active course means
+          // a brand-new install (or the learner reset everything). Send
+          // them to the library — that's where new courses come from.
+          const hasAnything =
+            !!activeCourse || inactiveBooks.length > 0 || relevantPacks.length > 0;
 
           return (
             <>
@@ -284,7 +438,7 @@ export default function Sidebar({
               )}
               {!activeCourse && inactiveBooks.length > 0 && (
                 <>
-                  <div className="fishbones__nav-section">Courses</div>
+                  <div className="fishbones__nav-section">In progress</div>
                   {inactiveBooks.map(renderGroup)}
                 </>
               )}
@@ -301,12 +455,34 @@ export default function Sidebar({
                   {relevantPacks.map(renderGroup)}
                 </>
               )}
+              {!hasAnything && (
+                <div className="fishbones__nav-empty">
+                  <p className="fishbones__nav-empty-headline">
+                    Nothing started yet
+                  </p>
+                  <p className="fishbones__nav-empty-body">
+                    Pick something from the library to get going. Courses
+                    you start will show up here.
+                  </p>
+                  <button
+                    type="button"
+                    className="fishbones__nav-empty-cta"
+                    onClick={onLibrary}
+                  >
+                    <span aria-hidden>
+                      <Icon icon={libraryBig} size="xs" color="currentColor" />
+                    </span>
+                    Open Library
+                  </button>
+                </div>
+              )}
             </>
           );
         })()}
       </nav>
+      )}
 
-      {menu && (onExportCourse || onDeleteCourse || onCourseSettings) && (
+      {menu && (onExportCourse || onDeleteCourse || onCourseSettings || onResetCourse) && (
         <div
           className="fishbones__context-menu"
           // Position at cursor. Fixed positioning so scroll state doesn't
@@ -345,6 +521,24 @@ export default function Sidebar({
               Export course…
             </button>
           )}
+          {/* Reset progress sits between the safe actions and Delete:
+              destructive in that it wipes completion state, but recoverable
+              (the lessons are still there to re-complete). Styled like the
+              Settings/Export rows, NOT like the Delete row. */}
+          {onResetCourse && (
+            <button
+              className="fishbones__context-menu-item"
+              onClick={() => {
+                onResetCourse(menu.courseId);
+                setMenu(null);
+              }}
+            >
+              <span className="fishbones__context-menu-icon" aria-hidden>
+                <Icon icon={rotateCcw} size="xs" color="currentColor" />
+              </span>
+              Reset progress
+            </button>
+          )}
           {onDeleteCourse && (
             <>
               {/* Separator between non-destructive and destructive actions. */}
@@ -365,6 +559,50 @@ export default function Sidebar({
           )}
         </div>
       )}
+
+      {chapterMenu && onResetChapter && (
+        <div
+          className="fishbones__context-menu"
+          style={{ left: chapterMenu.x, top: chapterMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="fishbones__context-menu-label">{chapterMenu.chapterTitle}</div>
+          <button
+            className="fishbones__context-menu-item"
+            onClick={() => {
+              onResetChapter(chapterMenu.courseId, chapterMenu.lessonIds);
+              setChapterMenu(null);
+            }}
+          >
+            <span className="fishbones__context-menu-icon" aria-hidden>
+              <Icon icon={rotateCcw} size="xs" color="currentColor" />
+            </span>
+            Reset chapter progress
+          </button>
+        </div>
+      )}
+
+      {lessonMenu && onResetLesson && (
+        <div
+          className="fishbones__context-menu"
+          style={{ left: lessonMenu.x, top: lessonMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="fishbones__context-menu-label">{lessonMenu.lessonTitle}</div>
+          <button
+            className="fishbones__context-menu-item"
+            onClick={() => {
+              onResetLesson(lessonMenu.courseId, lessonMenu.lessonId);
+              setLessonMenu(null);
+            }}
+          >
+            <span className="fishbones__context-menu-icon" aria-hidden>
+              <Icon icon={rotateCcw} size="xs" color="currentColor" />
+            </span>
+            Mark incomplete
+          </button>
+        </div>
+      )}
     </aside>
   );
 }
@@ -376,6 +614,8 @@ function CourseGroup({
   completed,
   onSelectLesson,
   onContextMenu,
+  onChapterContextMenu,
+  onLessonContextMenu,
 }: {
   course: Course;
   isActiveCourse: boolean;
@@ -383,6 +623,16 @@ function CourseGroup({
   completed: Set<string>;
   onSelectLesson: (courseId: string, lessonId: string) => void;
   onContextMenu?: (e: React.MouseEvent) => void;
+  /// Right-click on a chapter row. CourseGroup just forwards to the
+  /// sidebar parent which owns the menu state.
+  onChapterContextMenu?: (chapter: Chapter, e: React.MouseEvent) => void;
+  /// Right-click on a lesson row. The `isCompleted` flag lets the parent
+  /// decide whether to show a menu at all (V1: only for completed lessons).
+  onLessonContextMenu?: (
+    lesson: Lesson,
+    isCompleted: boolean,
+    e: React.MouseEvent,
+  ) => void;
 }) {
   // The active course is always expanded — the learner is working inside
   // it and needs its tree visible. Inactive courses default collapsed;
@@ -397,9 +647,11 @@ function CourseGroup({
   );
   const pct = totalLessons > 0 ? doneLessons / totalLessons : 0;
 
-  // Active course: full card with progress bar, always expanded. The
-  // elevated surface and the progress-bar treatment advertise "this is
-  // the course you're in" unambiguously.
+  // Active course: full card with circular progress ring, always
+  // expanded. The elevated surface + ring treatment advertises "this is
+  // the course you're in" unambiguously. Inside, only the chapter that
+  // contains the active lesson is open by default — other chapters are
+  // collapsed to their header row so the tree doesn't dominate.
   if (isActiveCourse) {
     return (
       <div className="fishbones__course fishbones__course--active">
@@ -409,42 +661,44 @@ function CourseGroup({
         >
           <div className="fishbones__course-title fishbones__course-title--static">
             <span className="fishbones__course-active-dot" aria-hidden />
+            <LanguageChip language={course.language} size="xs" iconOnly />
             <span className="fishbones__course-name">{course.title}</span>
-            <span className="fishbones__course-progress">
-              {doneLessons}/{totalLessons}
+            <span
+              className="fishbones__course-ring"
+              title={`${doneLessons}/${totalLessons} lessons complete`}
+            >
+              <ProgressRing
+                progress={pct}
+                size={28}
+                stroke={2.5}
+                label={`${Math.round(pct * 100)}%`}
+              />
             </span>
-          </div>
-          <div className="fishbones__course-progress-bar" aria-hidden>
-            <div
-              className="fishbones__course-progress-fill"
-              style={{ width: `${pct * 100}%` }}
-            />
           </div>
         </div>
 
         <div className="fishbones__course-body">
-          {course.chapters.map((chapter) => (
-            <ChapterBlock
-              key={chapter.id}
-              chapter={chapter}
-              courseId={course.id}
-              activeLessonId={activeLessonId}
-              completed={completed}
-              onSelectLesson={onSelectLesson}
-            />
-          ))}
+          <ChapterTree
+            chapters={course.chapters}
+            courseId={course.id}
+            activeLessonId={activeLessonId}
+            completed={completed}
+            onSelectLesson={onSelectLesson}
+            onChapterContextMenu={onChapterContextMenu}
+            onLessonContextMenu={onLessonContextMenu}
+          />
         </div>
       </div>
     );
   }
 
   // Inactive course: compact single-line row that matches the top nav
-  // item pattern (icon/caret + label + trailing count). Clicking the
-  // row expands inline so the learner can still jump into a specific
-  // lesson of a non-focused course without changing this one's "active"
-  // state — selecting a lesson inside will promote it to active via
-  // `onSelectLesson`, at which point the next render treats it as
-  // active and shows the full card.
+  // item pattern (caret + chip + label + tiny ring). Clicking the row
+  // expands inline so the learner can peek at the chapter list without
+  // changing focus — selecting a lesson inside still promotes it to
+  // active via `onSelectLesson`, at which point the next render treats
+  // it as active and shows the full card. The ring replaces the bare
+  // "x/y" text so progress reads as a glance-able visual.
   return (
     <div className="fishbones__course fishbones__course--compact">
       <button
@@ -460,24 +714,33 @@ function CourseGroup({
             weight="bold"
           />
         </span>
+        <LanguageChip language={course.language} size="xs" iconOnly />
         <span className="fishbones__course-name">{course.title}</span>
-        <span className="fishbones__course-row-progress">
-          {doneLessons}/{totalLessons}
+        <span
+          className="fishbones__course-row-ring"
+          title={`${doneLessons}/${totalLessons} lessons complete`}
+        >
+          <ProgressRing progress={pct} size={18} stroke={2} label="" />
         </span>
       </button>
 
       {expanded && (
         <div className="fishbones__course-body">
-          {course.chapters.map((chapter) => (
-            <ChapterBlock
-              key={chapter.id}
-              chapter={chapter}
-              courseId={course.id}
-              activeLessonId={undefined}
-              completed={completed}
-              onSelectLesson={onSelectLesson}
-            />
-          ))}
+          {/* Same disclosure tree as the active branch — section
+              grouping needs to behave identically whether the user is
+              peeking at an in-progress course or working in the
+              current one. ChapterTree degrades to a plain chapter
+              list for courses without `X · Y` titles, so this is
+              safe for legacy / PDF-imported books too. */}
+          <ChapterTree
+            chapters={course.chapters}
+            courseId={course.id}
+            activeLessonId={undefined}
+            completed={completed}
+            onSelectLesson={onSelectLesson}
+            onChapterContextMenu={onChapterContextMenu}
+            onLessonContextMenu={onLessonContextMenu}
+          />
         </div>
       )}
     </div>
@@ -528,15 +791,15 @@ function CourseCarousel({
   const prevIndicesRef = useRef<Map<string, number>>(new Map());
 
   const sorted = useMemo(() => {
-    // Bucket courses: ones with a recents entry (known activity time)
-    // vs ones without. Within the "known" bucket, recent-first. The
-    // unknown bucket keeps the original array order (library's
-    // newest-imported-first convention) at the end.
-    const withRecents = courses
+    // Only courses the learner has actually opened (have a recents
+    // entry). Discovery happens on the Library page now — the sidebar
+    // carousel is "jump back to where you were", not "browse what
+    // exists". Without this filter a fresh install would dump all 24
+    // bundled courses into the carousel and bury the one or two the
+    // learner is actually working on.
+    return courses
       .filter((c) => recents[c.id] !== undefined)
       .sort((a, b) => (recents[b.id] ?? 0) - (recents[a.id] ?? 0));
-    const withoutRecents = courses.filter((c) => recents[c.id] === undefined);
-    return [...withRecents, ...withoutRecents];
   }, [courses, recents]);
 
   useLayoutEffect(() => {
@@ -776,7 +1039,105 @@ function carouselGlyph(lang: LanguageId): string {
       return "C#";
     case "assembly":
       return "ASM";
+    case "svelte":
+      return "SV";
+    case "solid":
+      return "SO";
+    case "htmx":
+      return "HX";
+    case "astro":
+      return "AS";
+    case "bun":
+      return "BN";
+    case "tauri":
+      return "TR";
+    case "solidity":
+      return "SOL";
   }
+}
+
+/// Docs-mode sidebar body — replaces the course tree when the user is
+/// on the docs route. Renders a search input + section/page list driven
+/// by `FISHBONES_DOCS`. Selecting a page calls back to App-level state
+/// so the main pane (DocsView) re-renders with the matching body.
+///
+/// Search filter is local — only the sidebar list reacts to it; the
+/// main pane keeps showing whatever page is selected. Empty filter =
+/// the full list. We compare against title and tagline so a learner
+/// looking for "shortcut" finds the keyboard-shortcuts page even
+/// though that's not in the title.
+function DocsSidebarNav({
+  activeId,
+  onSelect,
+}: {
+  activeId?: string;
+  onSelect?: (pageId: string) => void;
+}) {
+  const [filter, setFilter] = useState("");
+
+  const filtered = useMemo(() => {
+    if (!filter.trim()) return FISHBONES_DOCS;
+    const needle = filter.trim().toLowerCase();
+    return FISHBONES_DOCS.map((s) => ({
+      ...s,
+      pages: s.pages.filter(
+        (p) =>
+          p.title.toLowerCase().includes(needle) ||
+          (p.tagline ?? "").toLowerCase().includes(needle),
+      ),
+    })).filter((s) => s.pages.length > 0);
+  }, [filter]);
+
+  return (
+    <nav className="fishbones__docs-nav" aria-label="Documentation">
+      <div className="fishbones__docs-search">
+        <Icon icon={searchIcon} size="xs" color="currentColor" />
+        <input
+          type="text"
+          placeholder="Search docs"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          spellCheck={false}
+          // Don't autofocus — clicking the Docs nav item shouldn't
+          // steal focus from the main pane's keyboard shortcuts. The
+          // user can click into the box themselves when they want to
+          // search.
+        />
+      </div>
+      <div className="fishbones__docs-nav-body">
+        {filtered.map((section) => (
+          <div className="fishbones__docs-nav-section" key={section.id}>
+            <div className="fishbones__docs-nav-section-title">
+              {section.title}
+            </div>
+            <ul className="fishbones__docs-nav-list">
+              {section.pages.map((page) => (
+                <li key={page.id}>
+                  <button
+                    type="button"
+                    className={`fishbones__docs-nav-item ${
+                      page.id === activeId
+                        ? "fishbones__docs-nav-item--active"
+                        : ""
+                    }`}
+                    onClick={() => onSelect?.(page.id)}
+                    title={page.tagline}
+                  >
+                    {page.title}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+        {filtered.length === 0 && (
+          <div className="fishbones__docs-nav-empty">
+            No pages match "{filter}"
+          </div>
+        )}
+      </div>
+    </nav>
+  );
 }
 
 /// Vertical nav-list row at the top of the sidebar. Icon + label, full
@@ -808,44 +1169,386 @@ function SidebarNavItem({
   );
 }
 
-function ChapterBlock({
-  chapter,
+/// Section separator used by importer scripts that want their chapter
+/// titles auto-grouped in the sidebar — e.g. the Svelte tutorial emits
+/// `Basic Svelte · Introduction`, `Basic Svelte · Reactivity`,
+/// `Advanced Svelte · Snippets`, etc. Consecutive chapters that share
+/// the same prefix collapse into one disclosure-toggle section.
+///
+/// Importers that don't use the separator just get the existing flat
+/// `Chapter → Lesson` tree — no migration needed.
+const SECTION_SEPARATOR = " · ";
+
+/// One node in the chapter-level tree. Either a single un-grouped
+/// chapter (the legacy course shape — most courses look like this) or
+/// a section containing 1+ chapters that all share the same "X · "
+/// prefix. The section variant carries a `displayTitle` per chapter
+/// (the suffix after the separator) so the nested ChapterBlock doesn't
+/// repeat the section label inside its own header.
+type ChapterTreeNode =
+  | { kind: "flat"; chapter: Chapter }
+  | {
+      kind: "section";
+      label: string;
+      entries: { chapter: Chapter; displayTitle: string }[];
+    };
+
+/// Walk a course's chapter list and merge consecutive `X · Y` titles
+/// into sections. Order is preserved — we never reorder chapters, just
+/// group adjacent ones. Anything without the separator (or with a
+/// different prefix from its neighbours) stays as a flat node.
+function groupChaptersBySection(chapters: Chapter[]): ChapterTreeNode[] {
+  const nodes: ChapterTreeNode[] = [];
+  let current: { label: string; entries: { chapter: Chapter; displayTitle: string }[] } | null =
+    null;
+
+  const flushSection = () => {
+    if (current) {
+      nodes.push({ kind: "section", label: current.label, entries: current.entries });
+      current = null;
+    }
+  };
+
+  for (const chapter of chapters) {
+    const idx = chapter.title.indexOf(SECTION_SEPARATOR);
+    if (idx === -1) {
+      // No separator → flat node. Close any open section first so
+      // we don't accidentally fold this chapter into the previous
+      // group.
+      flushSection();
+      nodes.push({ kind: "flat", chapter });
+      continue;
+    }
+    const label = chapter.title.slice(0, idx);
+    const displayTitle = chapter.title.slice(idx + SECTION_SEPARATOR.length);
+    if (current && current.label === label) {
+      current.entries.push({ chapter, displayTitle });
+    } else {
+      flushSection();
+      current = { label, entries: [{ chapter, displayTitle }] };
+    }
+  }
+  flushSection();
+  return nodes;
+}
+
+/// Renders a course's chapters with optional section grouping. Used by
+/// both the active and the compact (inactive) course branches so the
+/// disclosure tree looks identical regardless of which card the user
+/// is interacting with. When a course has zero chapters with the
+/// `X · Y` separator (the common case for PDF-imported books) this
+/// degrades to a plain list of ChapterBlocks — visually indistinct
+/// from the pre-grouping behaviour.
+function ChapterTree({
+  chapters,
   courseId,
   activeLessonId,
   completed,
   onSelectLesson,
+  onChapterContextMenu,
+  onLessonContextMenu,
 }: {
-  chapter: Chapter;
+  chapters: Chapter[];
   courseId: string;
   activeLessonId?: string;
   completed: Set<string>;
   onSelectLesson: (courseId: string, lessonId: string) => void;
+  onChapterContextMenu?: (chapter: Chapter, e: React.MouseEvent) => void;
+  onLessonContextMenu?: (
+    lesson: Lesson,
+    isCompleted: boolean,
+    e: React.MouseEvent,
+  ) => void;
+}) {
+  const tree = useMemo(() => groupChaptersBySection(chapters), [chapters]);
+
+  return (
+    <>
+      {tree.map((node, i) => {
+        if (node.kind === "flat") {
+          return (
+            <ChapterBlock
+              key={node.chapter.id}
+              chapter={node.chapter}
+              courseId={courseId}
+              activeLessonId={activeLessonId}
+              completed={completed}
+              onSelectLesson={onSelectLesson}
+              onChapterContextMenu={onChapterContextMenu}
+              onLessonContextMenu={onLessonContextMenu}
+            />
+          );
+        }
+        return (
+          <SectionGroup
+            // Index in the key because two sections sharing a label
+            // can theoretically appear if a course interleaves
+            // groups (e.g. Basic … Advanced … Basic). Real courses
+            // don't, but indexing the key removes the foot-gun.
+            key={`${courseId}:section:${i}:${node.label}`}
+            label={node.label}
+            entries={node.entries}
+            courseId={courseId}
+            activeLessonId={activeLessonId}
+            completed={completed}
+            onSelectLesson={onSelectLesson}
+            onChapterContextMenu={onChapterContextMenu}
+            onLessonContextMenu={onLessonContextMenu}
+          />
+        );
+      })}
+    </>
+  );
+}
+
+/// Disclosure-toggle wrapper around a contiguous run of chapters that
+/// share an `X · ` prefix. Header reads the section label (e.g. "Basic
+/// Svelte"); body renders nested ChapterBlocks with their suffix-only
+/// `displayTitle` so the same word doesn't repeat in every chapter row.
+///
+/// Open state persists in localStorage keyed by `(courseId, label)` so
+/// a user who expands "Advanced Svelte" once doesn't have to re-expand
+/// it next session. Sections that contain the active lesson auto-open
+/// regardless of the stored value — the user is working there, the
+/// path to their lesson should be visible.
+function SectionGroup({
+  label,
+  entries,
+  courseId,
+  activeLessonId,
+  completed,
+  onSelectLesson,
+  onChapterContextMenu,
+  onLessonContextMenu,
+}: {
+  label: string;
+  entries: { chapter: Chapter; displayTitle: string }[];
+  courseId: string;
+  activeLessonId?: string;
+  completed: Set<string>;
+  onSelectLesson: (courseId: string, lessonId: string) => void;
+  onChapterContextMenu?: (chapter: Chapter, e: React.MouseEvent) => void;
+  onLessonContextMenu?: (
+    lesson: Lesson,
+    isCompleted: boolean,
+    e: React.MouseEvent,
+  ) => void;
+}) {
+  const containsActiveLesson = activeLessonId
+    ? entries.some(({ chapter }) =>
+        chapter.lessons.some((l) => l.id === activeLessonId),
+      )
+    : false;
+
+  const storageKey = `fishbones:section-open:${courseId}:${label}`;
+  const [open, setOpen] = useState<boolean>(() => {
+    // Auto-open when our active lesson lives inside this section. The
+    // stored "0" only wins when the user is NOT currently working
+    // here — once they navigate in, the path becomes visible again.
+    if (containsActiveLesson) return true;
+    if (typeof window !== "undefined") {
+      try {
+        const stored = window.localStorage.getItem(storageKey);
+        if (stored === "1") return true;
+        if (stored === "0") return false;
+      } catch {
+        // localStorage can throw in private-browsing modes — fall
+        // through to the default.
+      }
+    }
+    // The whole point of the grouping is to fold a 30-chapter
+    // outline into a few digestible rows; default closed.
+    return false;
+  });
+
+  // If the user navigates to a lesson inside this section AFTER the
+  // group rendered closed, force it open so the active row is
+  // reachable without an extra click. We don't write to localStorage
+  // here — auto-open is per-render, not user intent.
+  useEffect(() => {
+    if (containsActiveLesson) setOpen(true);
+  }, [containsActiveLesson]);
+
+  const toggle = () => {
+    setOpen((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem(storageKey, next ? "1" : "0");
+      } catch {
+        // Private-browsing — silently drop the persistence; the
+        // toggle still works for the current session.
+      }
+      return next;
+    });
+  };
+
+  // Aggregate completion across every chapter in the group so the
+  // header ring reads as a single "X / Y" the same way a chapter
+  // header does — gives the learner one-glance progress for the
+  // whole section.
+  let totalLessons = 0;
+  let doneLessons = 0;
+  for (const { chapter } of entries) {
+    for (const lesson of chapter.lessons) {
+      totalLessons += 1;
+      if (completed.has(`${courseId}:${lesson.id}`)) doneLessons += 1;
+    }
+  }
+  const pct = totalLessons > 0 ? doneLessons / totalLessons : 0;
+
+  return (
+    <div
+      className={`fishbones__section ${
+        open ? "fishbones__section--open" : "fishbones__section--closed"
+      }`}
+    >
+      <button
+        type="button"
+        className="fishbones__section-title"
+        onClick={toggle}
+        aria-expanded={open}
+      >
+        <span className="fishbones__section-caret" aria-hidden>
+          <Icon
+            icon={open ? chevronDown : chevronRight}
+            size="xs"
+            color="currentColor"
+            weight="bold"
+          />
+        </span>
+        <span className="fishbones__section-title-text">{label}</span>
+        <span
+          className="fishbones__section-ring"
+          title={`${doneLessons}/${totalLessons} lessons complete`}
+        >
+          <ProgressRing progress={pct} size={16} stroke={2} label="" />
+        </span>
+      </button>
+      {open && (
+        <div className="fishbones__section-children">
+          {entries.map(({ chapter, displayTitle }) => (
+            <ChapterBlock
+              key={chapter.id}
+              chapter={chapter}
+              displayTitle={displayTitle}
+              courseId={courseId}
+              activeLessonId={activeLessonId}
+              completed={completed}
+              onSelectLesson={onSelectLesson}
+              onChapterContextMenu={onChapterContextMenu}
+              onLessonContextMenu={onLessonContextMenu}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ChapterBlock({
+  chapter,
+  displayTitle,
+  courseId,
+  activeLessonId,
+  completed,
+  onSelectLesson,
+  onChapterContextMenu,
+  onLessonContextMenu,
+}: {
+  chapter: Chapter;
+  /// Override for the title text. Set by SectionGroup so chapters
+  /// nested inside a "Basic Svelte" group show only the suffix
+  /// ("Introduction") rather than repeating "Basic Svelte · " in
+  /// every row. Falls back to `chapter.title` for the flat / legacy
+  /// case where there's no enclosing section.
+  displayTitle?: string;
+  courseId: string;
+  activeLessonId?: string;
+  completed: Set<string>;
+  onSelectLesson: (courseId: string, lessonId: string) => void;
+  onChapterContextMenu?: (chapter: Chapter, e: React.MouseEvent) => void;
+  onLessonContextMenu?: (
+    lesson: Lesson,
+    isCompleted: boolean,
+    e: React.MouseEvent,
+  ) => void;
 }) {
   const done = chapter.lessons.filter((l) => completed.has(`${courseId}:${l.id}`)).length;
   const total = chapter.lessons.length;
+  const pct = total > 0 ? done / total : 0;
+
+  // A chapter is open by default if it contains the currently-active
+  // lesson — that's the one the learner is working in, so the lesson
+  // tree should be visible without an extra click. Other chapters stay
+  // collapsed to their header row so the active card doesn't sprawl.
+  // Once the user manually toggles a chapter open, it stays open for
+  // the session (state is local).
+  const containsActiveLesson = activeLessonId
+    ? chapter.lessons.some((l) => l.id === activeLessonId)
+    : false;
+  const [open, setOpen] = useState(containsActiveLesson);
 
   return (
-    <div className="fishbones__chapter">
-      <div className="fishbones__chapter-title">
-        <span>{chapter.title}</span>
-        <span className="fishbones__chapter-progress">
-          {done}/{total}
+    <div
+      className={`fishbones__chapter ${
+        open ? "fishbones__chapter--open" : "fishbones__chapter--closed"
+      }`}
+    >
+      <button
+        type="button"
+        className="fishbones__chapter-title"
+        onClick={() => setOpen(!open)}
+        onContextMenu={
+          onChapterContextMenu
+            ? (e) => onChapterContextMenu(chapter, e)
+            : undefined
+        }
+        aria-expanded={open}
+      >
+        <span className="fishbones__chapter-caret" aria-hidden>
+          <Icon
+            icon={open ? chevronDown : chevronRight}
+            size="xs"
+            color="currentColor"
+            weight="bold"
+          />
         </span>
-      </div>
-      {chapter.lessons.map((lesson) => (
-        <LessonRow
-          key={lesson.id}
-          lesson={lesson}
-          isCompleted={completed.has(`${courseId}:${lesson.id}`)}
-          isActive={lesson.id === activeLessonId}
-          onSelect={() => onSelectLesson(courseId, lesson.id)}
-          difficulty={
-            lesson.kind === "exercise" || lesson.kind === "mixed"
-              ? lesson.difficulty
-              : undefined
-          }
-        />
-      ))}
+        <span className="fishbones__chapter-title-text">
+          {displayTitle ?? chapter.title}
+        </span>
+        <span
+          className="fishbones__chapter-ring"
+          title={`${done}/${total} lessons complete`}
+        >
+          <ProgressRing progress={pct} size={16} stroke={2} label="" />
+        </span>
+      </button>
+      {open && (
+        <div className="fishbones__chapter-lessons">
+          {chapter.lessons.map((lesson) => {
+            const isCompleted = completed.has(`${courseId}:${lesson.id}`);
+            return (
+              <LessonRow
+                key={lesson.id}
+                lesson={lesson}
+                isCompleted={isCompleted}
+                isActive={lesson.id === activeLessonId}
+                onSelect={() => onSelectLesson(courseId, lesson.id)}
+                onContextMenu={
+                  onLessonContextMenu
+                    ? (e) => onLessonContextMenu(lesson, isCompleted, e)
+                    : undefined
+                }
+                difficulty={
+                  lesson.kind === "exercise" || lesson.kind === "mixed"
+                    ? lesson.difficulty
+                    : undefined
+                }
+              />
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -855,12 +1558,16 @@ function LessonRow({
   isCompleted,
   isActive,
   onSelect,
+  onContextMenu,
   difficulty,
 }: {
   lesson: Lesson;
   isCompleted: boolean;
   isActive: boolean;
   onSelect: () => void;
+  /// Right-click handler. Optional so callers that don't care (no reset
+  /// support wired up) get the original behaviour with no menu.
+  onContextMenu?: (e: React.MouseEvent) => void;
   /// Only present for challenge-pack exercise rows. Drives a colored dot
   /// (easy → green, medium → amber, hard → red) that replaces the default
   /// kind-based accent so a pack reads as ramp-up, not as ordered lessons.
@@ -872,6 +1579,7 @@ function LessonRow({
         isActive ? "fishbones__nav-item--active" : ""
       }`}
       onClick={onSelect}
+      onContextMenu={onContextMenu}
     >
       <LessonStatusIcon
         kind={lesson.kind}

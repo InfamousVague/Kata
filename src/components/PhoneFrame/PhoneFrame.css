@@ -1,0 +1,275 @@
+/* Outer wrapper — fills its container's height + width, centres the
+   phone, and provides a drop-shadow positioning context. The phone
+   itself has a fixed 9:19.5 aspect ratio: we drive its size from the
+   SHORTER axis so a tall narrow container produces a tall narrow
+   phone, and a short wide container produces a smaller phone that
+   still fits — instead of the previous behaviour of `width: 100%`
+   (which made a 380px-wide phone roughly 820px tall, blowing past any
+   reasonable workbench pane height). */
+.fishbones-phone-frame-outer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0 auto;
+  padding: 12px;
+  box-sizing: border-box;
+  filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.45))
+    drop-shadow(0 4px 8px rgba(0, 0, 0, 0.25));
+}
+
+/* The phone shell — gradient bezel + rounded corners. Sized to fill
+   either height OR width while preserving the 9:19.5 aspect ratio, so
+   the device reads correctly inside any container shape. We clamp
+   `max-height` so the phone doesn't go larger than ~720px tall on a
+   very tall workbench, and `max-width` so it doesn't get absurdly
+   wide on a short fat container. The chin (bottom bezel) is thicker
+   than the others to match iPhone 14 Pro's silhouette. */
+.fishbones-phone-frame {
+  position: relative;
+  height: 100%;
+  max-height: 620px;
+  width: auto;
+  max-width: 320px;
+  aspect-ratio: 9 / 19.5;
+  background: linear-gradient(160deg, #1a1a1c 0%, #2a2a2c 100%);
+  border-radius: 40px;
+  /* Equal padding on all four sides — the iPhone-14-Pro-style chin
+     was a little distracting in the floating layout where the user
+     drags the device around. Symmetric bezels read cleaner. */
+  padding: 12px;
+  box-sizing: border-box;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.45);
+}
+
+/* The screen — dark fill the children render against. Clipped to a
+   slightly-smaller corner radius than the bezel so the rim stays
+   visible all the way around. */
+.fishbones-phone-frame-screen {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #0b0b10;
+  border-radius: 28px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Dynamic-island pill. Smaller than the spec iPhone 14 Pro shape
+   so the status-bar text on either side has room to breathe. */
+.fishbones-phone-frame-island {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 78px;
+  height: 22px;
+  border-radius: 14px;
+  background: #000;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* Status bar row — sits at the very top of the screen. The height
+   is tuned so its vertical centre aligns with the dynamic-island's
+   centre (island is 22px tall starting at top: 8px → centre at 19px;
+   status bar is 38px tall, so its centre is also at 19px). */
+.fishbones-phone-frame-status {
+  flex: 0 0 38px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  z-index: 1;
+}
+
+.fishbones-phone-frame-status-left,
+.fishbones-phone-frame-status-right {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  /* Push the left/right blocks away from the dynamic island
+     (78/2 = 39 + 4px breathing). */
+  width: calc(50% - 43px);
+}
+
+.fishbones-phone-frame-status-left {
+  justify-content: flex-start;
+}
+
+.fishbones-phone-frame-status-right {
+  justify-content: flex-end;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.fishbones-phone-frame-status-time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.fishbones-phone-frame-status-carrier {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.fishbones-phone-frame-glyph {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* Content slot — children render here. Auto-scroll keeps tall
+   previews inside the frame rather than overflowing the bezel. */
+.fishbones-phone-frame-content {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow: auto;
+  position: relative;
+  z-index: 0;
+}
+
+/* Home indicator bar — bottom-centre, semi-transparent, capsule shape. */
+.fishbones-phone-frame-home {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+  width: 134px;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.5);
+  z-index: 3;
+  pointer-events: none;
+}
+
+/* Side button silhouettes — slim rectangles tucked into the bezel
+   edges. Width spills onto the bezel via negative `left`/`right` so
+   the button reads as part of the device chrome rather than a sticker
+   on the screen. */
+.fishbones-phone-frame-side-btn {
+  position: absolute;
+  width: 3px;
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.55) 0%,
+    rgba(255, 255, 255, 0.05) 50%,
+    rgba(0, 0, 0, 0.55) 100%
+  );
+  border-radius: 1.5px;
+  pointer-events: none;
+}
+
+/* Left edge — mute switch (smaller) + two volume buttons. Heights and
+   offsets are eyeballed to land roughly where the iPhone 14 Pro
+   physical buttons sit. */
+.fishbones-phone-frame-side-btn--mute {
+  left: -1.5px;
+  top: 90px;
+  height: 28px;
+}
+
+.fishbones-phone-frame-side-btn--volup {
+  left: -1.5px;
+  top: 130px;
+  height: 50px;
+}
+
+.fishbones-phone-frame-side-btn--voldown {
+  left: -1.5px;
+  top: 188px;
+  height: 50px;
+}
+
+/* Right edge — sleep/wake. Slightly taller than the volume buttons. */
+.fishbones-phone-frame-side-btn--sleep {
+  right: -1.5px;
+  top: 150px;
+  height: 70px;
+}
+
+/* Console-style content used by the Swift renderer. Dark background,
+   monospace font, white-on-dark — feels like a terminal sitting inside
+   the device frame so the user can tell the simulator is showing
+   stdout/stderr rather than a real UI. */
+.fishbones-phone-frame-console {
+  width: 100%;
+  min-height: 100%;
+  padding: 18px 16px 60px 16px;
+  background: #050507;
+  color: #d8d8e0;
+  font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  box-sizing: border-box;
+}
+
+.fishbones-phone-frame-console-line {
+  margin: 0;
+}
+
+.fishbones-phone-frame-console-line--warn {
+  color: #f5d17a;
+}
+
+.fishbones-phone-frame-console-line--error {
+  color: #f3a0a0;
+}
+
+.fishbones-phone-frame-console-empty {
+  color: rgba(216, 216, 224, 0.45);
+  font-style: italic;
+}
+
+.fishbones-phone-frame-console-meta {
+  margin-top: 12px;
+  color: rgba(216, 216, 224, 0.45);
+  font-size: 10.5px;
+}
+
+.fishbones-phone-frame-console-error-block {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-left: 2px solid #f3a0a0;
+  color: #f3a0a0;
+  background: rgba(243, 160, 160, 0.06);
+}
+
+/* Sandboxed iframe used by the React Native renderer — fills the
+   content slot edge-to-edge so the rendered RN preview reads as the
+   phone's screen contents. */
+.fishbones-phone-frame-iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #0b0b10;
+  display: block;
+}
+
+/* Empty state — same shape as the console but with a placeholder
+   message so an unrun phone view doesn't look broken. */
+.fishbones-phone-frame-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 12.5px;
+  text-align: center;
+  box-sizing: border-box;
+}

@@ -1,0 +1,12 @@
+babel.min.js	3137678
+react.js	7594
+react-dom-client.js	191450
+react-native-web.js	457783
+three.module.js	1272972
+htmx.min.js	51238
+svelte-compiler.js	833153
+svelte-runtime.js	45406
+svelte-internal-disclose-version.js	66
+svelte-internal-client.js	104176
+svelte-internal-flags-legacy.js	32
+svelte-legacy.js	38477

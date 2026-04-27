@@ -10,6 +10,7 @@ import "@base/primitives/icon/icon.css";
 import type { RunResult } from "../../runtimes";
 import ReactNativeDevTools from "./ReactNativeDevTools";
 import MissingToolchainBanner from "../MissingToolchain/MissingToolchainBanner";
+import { DesktopUpsellBanner } from "../DesktopUpsell/DesktopUpsellBanner";
 import { useToolchainStatus } from "../../hooks/useToolchainStatus";
 import "./OutputPane.css";
 
@@ -365,6 +366,18 @@ export default function OutputPane({
               </div>
             ))}
           </div>
+        )}
+
+        {result?.desktopOnly && (
+          // Web build: this language's runtime needs the desktop app.
+          // Render the upsell instead of logs / tests / errors. The
+          // tests + logs arrays are empty in this case (the gate in
+          // runtimes/index.ts returns a synthetic RunResult) so the
+          // rest of the pane already renders nothing.
+          <DesktopUpsellBanner
+            language={result.desktopOnly.language}
+            reason={result.desktopOnly.reason}
+          />
         )}
 
         {showToolchainBanner && toolchainStatus && (

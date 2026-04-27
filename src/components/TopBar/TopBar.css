@@ -288,6 +288,142 @@
   opacity: 0.9;
 }
 
+/* Secondary variant — used when "Sign in" is the primary CTA, so View
+   profile demotes itself to an outline button to avoid two filled
+   primaries fighting for attention. Override the standalone
+   View-profile metrics so it matches the slim Sign-in button beside
+   it (the standalone one was sized to anchor the bottom of the panel
+   on its own; in a 2-button row the bigger metrics look chunky). */
+.fishbones__topbar-stats-view-profile--secondary {
+  background: transparent;
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border, rgba(127, 127, 127, 0.3));
+  margin-top: 0;
+  padding: 7px 12px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.fishbones__topbar-stats-view-profile--secondary:hover {
+  background: var(--color-bg-hover, rgba(127, 127, 127, 0.08));
+  opacity: 1;
+}
+
+/* Account row at the bottom of the dropdown. Holds the identity blurb
+   and the two-button row (Sign-in + View-profile, or View-profile +
+   Sign-out). Visually separated from the stat grid by margin only —
+   the existing divider treatment above the View-profile button reads
+   as enough hierarchy. */
+.fishbones__topbar-stats-account {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fishbones__topbar-stats-account-blurb {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--color-text-secondary, rgba(127, 127, 127, 0.85));
+}
+
+.fishbones__topbar-stats-account-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* Tight constraint so a long email doesn't push the dropdown wider
+     than its 320-ish-px home. */
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.fishbones__topbar-stats-account-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fishbones__topbar-stats-account-email {
+  font-size: 11.5px;
+  color: var(--color-text-secondary, rgba(127, 127, 127, 0.85));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fishbones__topbar-stats-account-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+/* Both buttons in the row stretch to fill — keeps them visually
+   balanced regardless of label length. The single-button cases (CSS
+   fallback when only one is rendered) still look fine because flex
+   width:100% on a lone child fills the row. */
+.fishbones__topbar-stats-account-row > button {
+  flex: 1 1 0;
+}
+
+/* When View-profile lives inside the account row (signed-in case), it
+   loses its standalone "anchored to the bottom" margin and matches
+   the slim button metrics of its row neighbours. */
+.fishbones__topbar-stats-account-row > .fishbones__topbar-stats-view-profile {
+  margin-top: 0;
+  padding: 7px 12px;
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+/* Both buttons in the account row inherit the View-profile padding so
+   they're visually identical in height. Buttons that take the primary-
+   fill (Sign in) and the outline/ghost (Sign out) only differ in
+   colour, not metrics. Padding kept slim so adding this row doesn't
+   make the dropdown feel chunky. */
+.fishbones__topbar-stats-signin,
+.fishbones__topbar-stats-signout {
+  padding: 7px 12px;
+  border-radius: 7px;
+  font-family: inherit;
+  font-size: 12px;
+  letter-spacing: 0.1px;
+  cursor: pointer;
+  line-height: 1.2;
+}
+
+/* "Sign in" — primary fill, same treatment as View-profile's primary
+   variant so a signed-out learner sees a single dominant CTA. */
+.fishbones__topbar-stats-signin {
+  background: var(--color-text-primary);
+  color: var(--color-bg-primary);
+  border: 1px solid var(--color-text-primary);
+  font-weight: 600;
+  transition: opacity 0.15s ease;
+}
+.fishbones__topbar-stats-signin:hover {
+  opacity: 0.9;
+}
+
+/* "Sign out" — quiet outline / ghost so it doesn't compete with the
+   View-profile primary above it. */
+.fishbones__topbar-stats-signout {
+  background: transparent;
+  color: var(--color-text-secondary, rgba(127, 127, 127, 0.85));
+  border: 1px solid var(--color-border, rgba(127, 127, 127, 0.3));
+  font-weight: 500;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.fishbones__topbar-stats-signout:hover {
+  background: var(--color-bg-hover, rgba(127, 127, 127, 0.08));
+  color: var(--color-text-primary);
+}
+
 /* Tab pills */
 .fishbones__tab {
   display: flex;
@@ -315,15 +451,11 @@
   border-color: var(--color-border-default);
 }
 
+/* Layout-only positioning for the language chip inside the tab pill.
+   The chip's own classes handle the visual treatment (background, color,
+   padding, sizing). */
 .fishbones__tab-lang {
-  display: inline-block;
-  padding: 1px 6px;
-  background: var(--color-bg-tertiary, rgba(255, 255, 255, 0.08));
-  border-radius: 4px;
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  color: var(--color-text-secondary);
+  flex-shrink: 0;
 }
 
 .fishbones__tab-close {

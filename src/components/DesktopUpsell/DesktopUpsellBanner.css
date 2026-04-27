@@ -1,0 +1,119 @@
+/* Banner shown inside OutputPane on the web build when the user
+   tried to run a language whose runtime needs the desktop app. Same
+   visual vocabulary as MissingToolchainBanner — soft surface, accent
+   border, primary CTA — but the copy + icon make clear it's a
+   "switch builds" message rather than "install brew + retry". */
+
+.fishbones-desktop-upsell {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px;
+  margin: 12px 0;
+  border-radius: 12px;
+  background: linear-gradient(
+    180deg,
+    rgba(139, 92, 246, 0.10),
+    rgba(139, 92, 246, 0.04)
+  );
+  border: 1px solid rgba(139, 92, 246, 0.28);
+  color: var(--color-text-primary, #f5f5f7);
+}
+
+.fishbones-desktop-upsell__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.fishbones-desktop-upsell__icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: rgba(139, 92, 246, 0.18);
+  color: #c4b5fd;
+}
+
+.fishbones-desktop-upsell__heading {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.fishbones-desktop-upsell__title {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.1px;
+}
+
+.fishbones-desktop-upsell__reason {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-secondary, rgba(255, 255, 255, 0.65));
+}
+
+.fishbones-desktop-upsell__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.fishbones-desktop-upsell__primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 18px;
+  border-radius: 8px;
+  background: #8b5cf6;
+  color: white;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.15s ease, transform 0.15s ease;
+  border: none;
+  cursor: pointer;
+}
+.fishbones-desktop-upsell__primary:hover {
+  background: #9b6ff7;
+  color: white;
+  transform: translateY(-1px);
+}
+
+.fishbones-desktop-upsell__more {
+  font-size: 12.5px;
+  color: var(--color-text-tertiary, rgba(255, 255, 255, 0.45));
+}
+.fishbones-desktop-upsell__more summary {
+  cursor: pointer;
+  user-select: none;
+}
+.fishbones-desktop-upsell__more summary:hover {
+  color: var(--color-text-primary, #f5f5f7);
+}
+.fishbones-desktop-upsell__more ul {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.fishbones-desktop-upsell__more a {
+  color: #c4b5fd;
+  text-decoration: none;
+}
+.fishbones-desktop-upsell__more a:hover {
+  text-decoration: underline;
+}
+
+.fishbones-desktop-upsell__foot {
+  font-size: 12px;
+  color: var(--color-text-tertiary, rgba(255, 255, 255, 0.45));
+  font-style: italic;
+}

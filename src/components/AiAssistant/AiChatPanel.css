@@ -5,22 +5,21 @@
 
 .fishbones-ai-panel {
   position: fixed;
-  /* The character button is 64px tall + 22px from the bottom edge.
-     We sit above it with a 24px breathing gap so the panel has a
-     visible separation from the click target instead of feeling
-     stuck onto it. */
-  bottom: calc(64px + 22px + 24px);
-  right: 22px;
+  /* Anchor sits 12px above the character button. Button is 52px
+     tall + 20px from the bottom edge, so the panel's bottom edge is
+     at `52 + 20 + 12 = 84px`. Re-do the maths if the orb size or
+     offset changes again — these constants flow into the `top` /
+     `height` calculations below too. */
+  bottom: calc(52px + 20px + 12px);
+  right: 20px;
   /* Use both `top` AND `bottom` to give the panel a *definite*
      height (capped by the viewport on small screens). Without a
      definite height the flex column's `flex: 1` body can't compute
      a real overflow target — the scrollbar appears in DOM but the
      wheel doesn't have a constrained surface to scroll, which is
-     exactly the "I can't scroll the history" symptom. We also set
-     a `height` floor so the panel doesn't collapse to its content
-     when there are only one or two messages. */
-  top: max(14px, calc(100vh - 64px - 22px - 24px - min(620px, 80vh)));
-  height: min(620px, calc(100vh - 64px - 22px - 24px - 14px));
+     exactly the "I can't scroll the history" symptom. */
+  top: max(14px, calc(100vh - 52px - 20px - 12px - min(620px, 80vh)));
+  height: min(620px, calc(100vh - 52px - 20px - 12px - 14px));
   width: 380px;
   max-width: calc(100vw - 28px);
   z-index: 91;

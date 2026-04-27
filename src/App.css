@@ -124,6 +124,30 @@ button {
   min-height: 0;
 }
 
+/* Floating-phone path for RN lessons: editor takes the full workbench
+   width without a paired output pane (the FloatingPhone modal IS the
+   output surface). We mimic the Workbench's card chrome (border,
+   radius, surface) so swapping into this layout doesn't visually
+   demote the editor — same shape, same depth, just one column. */
+.fishbones__lesson-workbench-solo {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-default);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.fishbones__lesson-workbench-solo > .fishbones-editor {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+}
+
 /* Quiz + reading-only long lessons: stack the reader and a scrollable body
    vertically instead of the row/workbench layout exercises use.
    In this single-column layout we left-align the content and cap width

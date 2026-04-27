@@ -453,6 +453,48 @@
   border: 1px solid var(--color-border-default);
 }
 
+/* Filename strip — matches the Svelte tutorial's chrome where each
+   code fence gets a small label saying which file the snippet
+   belongs to. Source comes from the `/// file: NAME` header that
+   markdown.ts strips off the raw fence content. Mono-font + slightly
+   muted so it reads as metadata, not as code. The `--with-filename`
+   variant on the wrapper drops top padding so the strip butts up to
+   the code; the strip itself owns its own padding. */
+.fishbones-code-filename {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border-default);
+  font-family: "SF Mono", ui-monospace, Menlo, monospace;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--color-text-tertiary);
+  letter-spacing: 0.1px;
+}
+
+.fishbones-code-filename span {
+  /* Truncate long paths (e.g. `src/routes/api/[slug]/+server.js`)
+     so the strip never wraps to two lines. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Make room on the right for the `?` Ask Fishbones badge so it
+   doesn't overlap the filename text when the snippet is short. */
+.fishbones-code-block--with-filename .fishbones-code-filename {
+  padding-right: 40px;
+}
+
+/* When a filename strip is present, the Ask badge sits over the
+   strip rather than over the code body — looks tidier and keeps it
+   out of the way of the first line. */
+.fishbones-code-block--with-filename .fishbones-code-block-ask {
+  top: 4px;
+}
+
 /* `?` badge that opens the AI panel pre-loaded with a "walk me
    through this" prompt for the snippet. Hidden until the block is
    hovered so the badge doesn't compete with the code itself.

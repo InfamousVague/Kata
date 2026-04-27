@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { storage } from "../lib/storage";
 import { seedCourses } from "../data/seedCourses";
+import { seedWebStarterCourses } from "../data/webSeedCourses";
+import { isWeb } from "../lib/platform";
 import type { Course } from "../data/types";
 
 /// Load the user's courses from the app data dir.
@@ -63,7 +65,7 @@ export function useCourses() {
     });
     const p = (async () => {
       try {
-        const full = await invoke<Course>("load_course", { courseId });
+        const full = await storage.loadCourse(courseId);
         hydratedIds.current.add(courseId);
         setCourses((prev) =>
           prev.map((c) => (c.id === courseId ? full : c)),
@@ -86,23 +88,29 @@ export function useCourses() {
   async function refresh(): Promise<Course[]> {
     const t0 = performance.now();
     try {
-      // Stage 1: fast summary pull. One IPC, heavy fields stripped
-      // server-side. Flips `loaded` the moment this returns so the
+      // Web-only: first-launch seed. No-op on every visit after the
+      // first (gated by a meta flag inside IndexedDB), and a no-op
+      // on desktop entirely. Runs BEFORE the summary pull so the
+      // first render already has courses.
+      if (isWeb) {
+        await seedWebStarterCourses();
+      }
+
+      // Stage 1: fast summary pull. One call into storage (Tauri
+      // SQLite on desktop, IndexedDB on web), heavy fields stripped
+      // before return. Flips `loaded` the moment this returns so the
       // bootloader dismisses and the library renders.
-      let summaries = await invoke<Course[]>("list_courses_summary");
+      let summaries = await storage.listCoursesSummary();
       const tSummary = performance.now();
 
-      // First-launch seed: if the user has no courses on disk AND we
-      // ship bundled seed content, serialize it to disk and re-list.
-      // Mirrors the old behaviour — unchanged semantics, just keyed
-      // off the summary count.
+      // First-launch seed: if storage has no courses AND we ship
+      // bundled seed content, serialize the seeds and re-list.
+      // Mirrors the desktop's first-launch flow.
       if (summaries.length === 0 && seedCourses.length > 0) {
         await Promise.all(
-          seedCourses.map((c) =>
-            invoke("save_course", { courseId: c.id, body: c }),
-          ),
+          seedCourses.map((c) => storage.saveCourse(c.id, c)),
         );
-        summaries = await invoke<Course[]>("list_courses_summary");
+        summaries = await storage.listCoursesSummary();
       }
 
       // Previous session may have left `hydratedIds` populated — reset
@@ -121,7 +129,7 @@ export function useCourses() {
       })();
       // eslint-disable-next-line no-console
       console.log(
-        `[load] summary invoke=${(tSummary - t0).toFixed(0)}ms ` +
+        `[load:${isWeb ? "web" : "desktop"}] summary=${(tSummary - t0).toFixed(0)}ms ` +
           `react=${(tSetState - tSummary).toFixed(0)}ms ` +
           `courses=${summaries.length} ` +
           `payload=${(payloadBytes / 1024).toFixed(0)}KB`,
@@ -151,8 +159,9 @@ export function useCourses() {
 
       return summaries;
     } catch (e) {
-      // Not in Tauri, or backend failed. Use the bundled seed so the UI at
-      // least renders something.
+      // Backend failed (e.g. IndexedDB unavailable in private browsing,
+      // Tauri DB still migrating). Use the bundled seed so the UI at
+      // least renders something — readers can still browse the prose.
       setCourses(seedCourses);
       setError(e instanceof Error ? e.message : String(e));
       return seedCourses;

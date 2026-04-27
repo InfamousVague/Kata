@@ -268,3 +268,100 @@
 .fishbones-playground-solo--floating {
   position: relative;
 }
+
+/* Phone-view stage. Holds the PhoneFrame inside the right pane —
+   centres it vertically AND horizontally, and paints a soft gradient
+   backdrop so the device chrome reads as "floating" against a stage
+   rather than wedged into a flat wall. The PhoneFrame caps its own
+   width at 380px, so the stage just needs to provide breathing room
+   on either side. */
+.fishbones-playground-phone-stage {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px 20px;
+  box-sizing: border-box;
+  /* Subtle two-tone gradient that gives the phone something to "float"
+     on visually. Tints the workbench's bg-secondary so light themes
+     stay light and dark themes stay dark. */
+  background:
+    radial-gradient(
+      ellipse at 50% 0%,
+      rgba(127, 127, 160, 0.08) 0%,
+      rgba(0, 0, 0, 0) 60%
+    ),
+    linear-gradient(
+      180deg,
+      var(--color-bg-secondary) 0%,
+      var(--color-bg-primary) 100%
+    );
+  /* No `overflow: auto` here — when the stage scrolls instead of the
+     phone, the device's height constraint never kicks in and the
+     frame can run off the bottom edge. The phone's own
+     `max-height: 100%` clamps it inside the stage cleanly. */
+  overflow: hidden;
+}
+
+/* Phone-mode workbench — overrides the default `--solo` flex direction
+   so the editor + phone split horizontally instead of stacking. We
+   keep the rest of the solo chrome (border + radius + bg-secondary
+   surface) so the card reads consistently with the other view modes. */
+.fishbones-playground-solo--phone {
+  flex-direction: row;
+  align-items: stretch;
+}
+
+.fishbones-playground-phone-pane {
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Left pane — editor. Takes the larger slice so a full keystroke session
+   stays comfortable; the phone is the smaller slice on the right. */
+.fishbones-playground-phone-pane--editor {
+  flex: 1 1 auto;
+  border-right: 1px solid var(--color-border-default);
+}
+
+.fishbones-playground-phone-pane--editor > .fishbones-editor {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+}
+
+/* Right pane — phone stage. Sized as a percentage so the phone frame
+   has predictable breathing room around it; the PhoneFrame caps at
+   380px wide so this is plenty. `min-height: 0` is essential so the
+   phone-frame's `height: 100%` chain can resolve all the way back
+   up — without it the inner aspect-ratio'd phone bursts out of the
+   bottom of the workbench card. */
+.fishbones-playground-phone-pane--phone {
+  flex: 0 0 46%;
+  max-width: 520px;
+  min-width: 280px;
+  min-height: 0;
+}
+
+/* On narrow widths the side-by-side gets cramped — fall back to a
+   single column with the phone underneath the editor so the editor
+   doesn't shrink past usability. */
+@media (max-width: 900px) {
+  .fishbones-playground-solo--phone {
+    flex-direction: column;
+  }
+  .fishbones-playground-phone-pane--editor {
+    border-right: 0;
+    border-bottom: 1px solid var(--color-border-default);
+  }
+  .fishbones-playground-phone-pane--phone {
+    flex: 0 0 auto;
+    max-width: 100%;
+    min-width: 0;
+  }
+}

@@ -1,0 +1,106 @@
+/* Language chip — branded language tag.
+ *
+ * Visual contract:
+ *   - background: 12% of the brand colour
+ *   - text + icon: 100% of the brand colour
+ *   - rounded pill, no border
+ *   - inline-flex so it sits next to its sibling text without forcing
+ *     a line break, and the icon vertically aligns to the label.
+ *
+ * The `--langchip-color` custom property is set inline by the React
+ * component (so the chip inherits the language's brand colour).
+ * Everything else is theme/size-agnostic. */
+
+.fishbones-langchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  /* `color-mix` is supported in every browser Tauri's webview runs
+     against (Safari 16.2+, Chromium 111+). Falls back gracefully to
+     the solid colour on much older webviews — still legible just
+     less elegant. */
+  background: color-mix(in srgb, var(--langchip-color) 12%, transparent);
+  color: var(--langchip-color);
+  font-weight: 600;
+  letter-spacing: 0.1px;
+  /* Don't let parent flex containers stretch us — chips should hug
+     their content. */
+  flex: 0 0 auto;
+  white-space: nowrap;
+  user-select: none;
+  /* Quiet entry transition so re-renders (e.g. swapping the active tab)
+     don't feel jarring. */
+  transition: background 0.12s ease;
+}
+
+/* ── Sizes ─────────────────────────────────────────────────────── */
+
+.fishbones-langchip--xs {
+  height: 16px;
+  padding: 0 6px;
+  font-size: 9.5px;
+  gap: 4px;
+}
+.fishbones-langchip--xs .fishbones-langchip-icon svg {
+  width: 13px;
+  height: 13px;
+}
+
+.fishbones-langchip--sm {
+  height: 22px;
+  padding: 0 8px;
+  font-size: 11px;
+  gap: 5px;
+}
+.fishbones-langchip--sm .fishbones-langchip-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.fishbones-langchip--md {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 13px;
+  gap: 6px;
+}
+.fishbones-langchip--md .fishbones-langchip-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ── Icon-only variant ─────────────────────────────────────────── */
+
+/* Square the chip when there's no label so the icon sits centred
+   in a circle instead of an oblong pill. */
+.fishbones-langchip--icon-only {
+  padding: 0;
+  width: 22px;
+  justify-content: center;
+}
+.fishbones-langchip--xs.fishbones-langchip--icon-only {
+  width: 16px;
+}
+.fishbones-langchip--md.fishbones-langchip--icon-only {
+  width: 28px;
+}
+
+/* ── Internal layout ───────────────────────────────────────────── */
+
+.fishbones-langchip-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  /* Anchor the icon's optical centre to the chip baseline — the
+     SVGs we ship use a 24-grid viewBox where the glyph isn't always
+     dead-centre, so a 1-px nudge keeps things visually balanced
+     across icons. */
+  margin-top: -0.5px;
+}
+
+.fishbones-langchip-label {
+  /* Tighter line-height than default — keeps a single-line label
+     vertically centred even when the parent uses a larger leading. */
+  line-height: 1;
+}

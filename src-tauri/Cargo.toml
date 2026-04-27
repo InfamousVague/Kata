@@ -13,8 +13,14 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+# `devtools` keeps the Webview Inspector available in release builds
+# too. We're shipping to ourselves and a few testers who actively
+# need to file Monaco/CSS/etc. bugs; the small binary-size cost is
+# worth the ability to right-click → Inspect on a notarized install.
+# Drop this once the app stabilises.
+tauri = { version = "2", features = ["devtools"] }
 tauri-plugin-opener = "2"
+tauri-plugin-deep-link = "2"
 tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

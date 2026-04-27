@@ -1,0 +1,123 @@
+/* Floating phone modal. Sits above the editor pane so the user can
+   drag the React Native preview anywhere on screen — independent of
+   the workbench layout. The PhoneFrame chrome inside provides the
+   visual "device" frame; this wrapper adds only a thin title-bar
+   strip and a drop shadow so the phone reads as "lifted off the
+   page" without a heavy outer frame fighting the device chrome. */
+.fishbones-floating-phone {
+  position: fixed;
+  /* Smaller fixed width — was 380px which felt billboard-y in the
+     workbench. 320px keeps the device readable while leaving more
+     room for the editor underneath. */
+  width: 320px;
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  z-index: 80;
+  border-radius: 40px;
+  background: transparent;
+  filter:
+    drop-shadow(0 18px 32px rgba(0, 0, 0, 0.4))
+    drop-shadow(0 4px 8px rgba(0, 0, 0, 0.25));
+  transition: none;
+  user-select: none;
+}
+
+.fishbones-floating-phone--dragging {
+  /* Slight lift while dragging so it reads as "picked up". */
+  filter:
+    drop-shadow(0 24px 40px rgba(0, 0, 0, 0.5))
+    drop-shadow(0 6px 12px rgba(0, 0, 0, 0.3));
+}
+
+/* Title bar — separate pill floating above the phone. Same width as
+   the phone (inherits the wrapper's 320px), fully-rounded on all
+   sides, with a small gap below it so it reads as a distinct
+   floating control rather than chrome attached to the device. */
+.fishbones-floating-phone-titlebar {
+  flex: 0 0 auto;
+  height: 24px;
+  padding: 0 6px 0 14px;
+  /* Constrain padding to the wrapper's 320px width so the pill
+     never overshoots the phone's edge. Without this the side
+     padding adds to width and the bar paints ~340px wide. */
+  box-sizing: border-box;
+  width: 100%;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: linear-gradient(160deg, #1a1a1c 0%, #2a2a2c 100%);
+  /* Half-height radius gives a clean pill shape. */
+  border-radius: 999px;
+  cursor: grab;
+  /* Subtle inner rim so the pill has dimension against the page. */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.4);
+}
+
+.fishbones-floating-phone--dragging .fishbones-floating-phone-titlebar {
+  cursor: grabbing;
+}
+
+.fishbones-floating-phone-title {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+  pointer-events: none;
+}
+
+.fishbones-floating-phone-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.fishbones-floating-phone-btn {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.55);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.fishbones-floating-phone-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.fishbones-floating-phone-btn:focus-visible {
+  outline: 2px solid var(--color-text-secondary);
+  outline-offset: 1px;
+}
+
+/* Body slot — holds the PhoneFrame. The PhoneFrame's own
+   `.fishbones-phone-frame-outer` is `width: 100%; height: 100%` and
+   centres the device on its short axis, so the body just needs to
+   give it a fixed height window. We hard-set the height proportional
+   to the 380px width using the device's 9:19.5 aspect ratio (with
+   a little slack for the phone-frame's own padding) so the modal
+   is right-sized at first paint without flicker. */
+.fishbones-floating-phone-body {
+  flex: 1 1 auto;
+  /* 320 × 19.5 / 9 ≈ 693, plus a touch of phone-frame outer padding.
+     Capped by max-height so a short workbench shrinks the phone
+     instead of clipping it. */
+  height: 600px;
+  max-height: calc(100vh - 24px - 32px);
+  background: transparent;
+  overflow: hidden;
+  border-radius: 40px;
+}

@@ -4,8 +4,24 @@ ingest/node_modules/
 
 # Build output
 dist/
+dist-web/
 src-tauri/target/
 src-tauri/gen/
+# Build cache for the vendor + node-fetch scripts. Both populate from
+# package metadata at build time; nothing here is hand-authored.
+src-tauri/.cache/
+# Bundled Node 22 runtime — fetched fresh by scripts/fetch-node-runtime.mjs
+# during `npm run build`. ~186MB, host-platform-specific, not portable.
+src-tauri/resources/node/
+# Rust target dir for the API server. Same reasoning as src-tauri/target.
+api/target/
+
+# Web build vendor staging — copied from src-tauri/resources/vendor
+# by scripts/copy-vendor-to-public.mjs as part of `npm run build:web`.
+public/vendor/
+# Starter-course staging — extracted from src-tauri/resources/bundled-packs
+# by scripts/extract-starter-courses.mjs as part of `npm run build:web`.
+public/starter-courses/
 
 # macOS
 .DS_Store

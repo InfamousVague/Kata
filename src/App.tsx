@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
+import { onOpenUrl, getCurrent as getCurrentDeepLinks } from "@tauri-apps/plugin-deep-link";
 import { Course, Lesson, isExerciseKind, isQuiz } from "./data/types";
 import { makeBus, openPoppedWorkbench, closePoppedWorkbench } from "./lib/workbenchSync";
 import { deriveSolutionFiles } from "./lib/workbenchFiles";
@@ -14,6 +15,12 @@ import LessonReader from "./components/Lesson/LessonReader";
 import LessonNav from "./components/Lesson/LessonNav";
 import EditorPane from "./components/Editor/EditorPane";
 import OutputPane from "./components/Output/OutputPane";
+import PhoneToggleButton from "./components/FloatingPhone/PhoneToggleButton";
+import {
+  openPhonePopout,
+  closePhonePopout,
+  makePhonePreviewBus,
+} from "./lib/phonePopout";
 import Workbench from "./components/Workbench/Workbench";
 import MissingToolchainBanner from "./components/MissingToolchain/MissingToolchainBanner";
 import { useToolchainStatus } from "./hooks/useToolchainStatus";
@@ -29,14 +36,21 @@ import CourseSettingsModal from "./components/CourseSettings/CourseSettingsModal
 import FloatingIngestPanel from "./components/IngestPanel/FloatingIngestPanel";
 import ProfileView from "./components/Profile/ProfileView";
 import PlaygroundView from "./components/Playground/PlaygroundView";
+import DocsView from "./components/Docs/DocsView";
+import { FISHBONES_DOCS } from "./docs/pages";
+import { isWeb } from "./lib/platform";
 import GeneratePackDialog from "./components/ChallengePack/GeneratePackDialog";
 import { useIngestRun } from "./hooks/useIngestRun";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import QuizView from "./components/Quiz/QuizView";
 import AiAssistant from "./components/AiAssistant/AiAssistant";
+import { InstallBanner } from "./components/InstallBanner/InstallBanner";
 import CommandPalette from "./components/CommandPalette/CommandPalette";
 import { runFiles, isPassing, type RunResult } from "./runtimes";
 import { useProgress } from "./hooks/useProgress";
+import { useFishbonesCloud } from "./hooks/useFishbonesCloud";
+import FirstLaunchPrompt from "./components/SignInDialog/FirstLaunchPrompt";
+import SignInDialog from "./components/SignInDialog/SignInDialog";
 import { useCourses } from "./hooks/useCourses";
 import { useRecentCourses } from "./hooks/useRecentCourses";
 import { useStreakAndXp } from "./hooks/useStreakAndXp";
@@ -80,6 +94,11 @@ export default function App() {
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
   const [docsImportOpen, setDocsImportOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Sign-in modal state, opened by the "Sign in" button in the TopBar
+  // stats dropdown. Kept separate from `FirstLaunchPrompt` (which has
+  // its own one-time-show gate) so signed-out users can re-open it
+  // from the dropdown whenever they want.
+  const [signInOpen, setSignInOpen] = useState(false);
   // Pending delete request queued by the library / sidebar context menu.
   // Kept in state rather than firing window.confirm() directly so we can
   // render an app-styled modal with Escape + backdrop-click dismissal.
@@ -90,7 +109,161 @@ export default function App() {
 
   /// Completion state lives in SQLite; the hook loads on mount and writes
   /// through on markCompleted. Keys are `${courseId}:${lessonId}`.
-  const { completed, history, markCompleted } = useProgress();
+  const {
+    completed,
+    history,
+    markCompleted,
+    clearLessonCompletion,
+    clearChapterCompletions,
+    clearCourseCompletions,
+  } = useProgress();
+
+  /// Optional Fishbones cloud account — bound at the app level so the
+  /// first-launch prompt, the Settings → Account section, and the
+  /// markCompleted-side-effect sync all share the same hook instance.
+  const cloud = useFishbonesCloud();
+
+  /// Listen for the browser-OAuth callback. The relay redirects to
+  /// `fishbones://oauth/done?session=...&status=ok&token=fb_...` (or
+  /// `status=error&error=...&message=...`); the deep-link plugin
+  /// surfaces those URLs to us as a stream of strings. We parse the
+  /// query params, hand the token to the cloud hook, and let it run
+  /// the existing /me-on-mount fetch to materialise the user.
+  ///
+  /// `getCurrent` covers the cold-start case where the app was
+  /// launched by the OS in response to the deep-link itself (the
+  /// browser will have just dispatched it, the app boots, and the
+  /// URL is waiting for us). `onOpenUrl` handles the warm case:
+  /// the app was already running and the OS forwarded the URL.
+  ///
+  /// We pin the latest `cloud` instance into a ref so the listener
+  /// closure can call the up-to-date `applyOAuthToken` without
+  /// becoming a render-dep. If we listed `[cloud]` (or even
+  /// `[cloud.applyOAuthToken]`) here, the effect would re-run every
+  /// time the cloud state changed — re-subscribing the listener AND
+  /// re-calling `getCurrentDeepLinks()`. On macOS the latter
+  /// sometimes re-delivers the OAuth URL each call, which fires
+  /// applyOAuthToken repeatedly — `user` flips to null between each
+  /// `/me` resolve, causing the visible auth-state flashing the
+  /// learner sees in the TopBar / Settings.
+  const cloudRef = useRef(cloud);
+  cloudRef.current = cloud;
+  useEffect(() => {
+    let cancelled = false;
+    const handleUrls = (urls: string[]) => {
+      for (const raw of urls) {
+        try {
+          const url = new URL(raw);
+          // Defensive guard — the listener fires for any registered
+          // scheme, and we only know how to handle our OAuth callback.
+          if (url.protocol !== "fishbones:") continue;
+          const status = url.searchParams.get("status");
+          const token = url.searchParams.get("token");
+          if (status === "ok" && token) {
+            console.log("[fishbones] oauth callback: success");
+            void cloudRef.current.applyOAuthToken(token);
+          } else if (status === "error") {
+            console.error(
+              `[fishbones] oauth callback: error ${url.searchParams.get("error")} — ${url.searchParams.get("message")}`,
+            );
+          } else {
+            console.warn(`[fishbones] oauth callback: unrecognised payload ${raw}`);
+          }
+        } catch (e) {
+          console.error("[fishbones] oauth callback: parse failed", e);
+        }
+      }
+    };
+    // Cold-start: the app may have been launched by clicking the
+    // callback URL in the browser. Drain whatever URL fired the boot.
+    void getCurrentDeepLinks()
+      .then((urls) => {
+        if (!cancelled && urls && urls.length > 0) handleUrls(urls);
+      })
+      .catch((e) => {
+        // getCurrent returns a rejection on web preview / unsupported
+        // hosts. Not fatal; the warm-path listener still works in
+        // the desktop bundle.
+        console.debug("[fishbones] deep-link getCurrent unavailable:", e);
+      });
+    // Warm-path listener. Returns an unlisten fn we call on unmount.
+    const unlistenPromise = onOpenUrl(handleUrls).catch((e) => {
+      console.debug("[fishbones] deep-link onOpenUrl unavailable:", e);
+      return undefined;
+    });
+    return () => {
+      cancelled = true;
+      void unlistenPromise.then((fn) => {
+        if (typeof fn === "function") fn();
+      });
+    };
+    // Empty deps — run once on mount, unsubscribe on unmount. The
+    // closure sees the latest cloud instance via cloudRef.current.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /// One-time pull on first sign-in: when a freshly signed-in account
+  /// has progress on the relay, merge it into local SQLite so the
+  /// learner doesn't lose their existing streak. Tracked via
+  /// localStorage so we don't re-pull on every app launch.
+  useEffect(() => {
+    // `cloud.user` is the discriminated union: `null` (booting),
+    // `false` (definitely-not-signed-in), or the user object. Narrow
+    // to the object case before reading `.id`.
+    if (!cloud.signedIn || cloud.user === null || cloud.user === false) return;
+    const pulledKey = `fishbones:cloud:pulled-${cloud.user.id}`;
+    if (localStorage.getItem(pulledKey)) return;
+    let cancelled = false;
+    void cloud.pullProgress().then((rows) => {
+      if (cancelled) return;
+      for (const r of rows) {
+        // Re-apply each row through the local hook so SQLite + the
+        // in-memory `completed` Set both stay in sync.
+        markCompleted(r.course_id, r.lesson_id);
+      }
+      try {
+        localStorage.setItem(pulledKey, new Date().toISOString());
+      } catch {
+        /* private mode */
+      }
+    }).catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+    // `cloud` itself is a memoised reference now (see useFishbonesCloud),
+    // so listing it here is fine — but we explicitly call out the
+    // narrowed slices we read, so refactors that change the hook
+    // shape don't accidentally drop a dep.
+  }, [cloud, markCompleted]);
+
+  /// Best-effort push of the local history every 30s while signed
+  /// in. We use the existing `history` array (already in memory) so
+  /// the relay catches up even if the user finished lessons offline
+  /// and came back online later. Failures are swallowed — sync is
+  /// optional and shouldn't pop user-visible errors during normal use.
+  useEffect(() => {
+    if (!cloud.signedIn) return;
+    let cancelled = false;
+    const flush = () => {
+      if (cancelled || history.length === 0) return;
+      void cloud.pushProgress(
+        history.map((h) => ({
+          course_id: h.course_id,
+          lesson_id: h.lesson_id,
+          // history uses unix-epoch seconds; relay stores ISO 8601
+          // strings so the server-side merge can rely on lexicographic
+          // ordering working correctly for "newer wins".
+          completed_at: new Date(h.completed_at * 1000).toISOString(),
+        })),
+      ).catch(() => undefined);
+    };
+    flush();
+    const id = window.setInterval(flush, 30000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [cloud.signedIn, cloud, history]);
 
   /// Timestamp of the last fresh completion (transition from incomplete →
   /// complete). Drives the AI tutor's happy-celebration loop. Plain
@@ -141,9 +314,19 @@ export default function App() {
   /// iconbar. Selecting a lesson anywhere forces back to "courses" so the
   /// learner isn't stuck on a side view after clicking a sidebar item.
   const [view, setView] = useState<
-    "courses" | "profile" | "playground" | "library"
+    "courses" | "profile" | "playground" | "library" | "docs"
   >(
     "courses",
+  );
+
+  /// Active docs page id. Lifted to App-level so the main Sidebar can
+  /// render the docs section/page nav AND DocsView can render the
+  /// matching body — both as controlled views over a single source of
+  /// truth. Without this lift we'd be back to two sidebars trying to
+  /// stay in sync. Default to the first page of the first section so
+  /// opening the docs route doesn't drop us on a blank pane.
+  const [docsActiveId, setDocsActiveId] = useState<string>(
+    () => FISHBONES_DOCS[0]?.pages[0]?.id ?? "welcome",
   );
 
   /// Challenge-pack generation dialog visibility. Opened from the Profile
@@ -450,6 +633,27 @@ export default function App() {
         onOpenProfile={() => setView("profile")}
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
+        // Cloud-sync account row in the stats dropdown. The chip stays
+        // hidden while the cloud hook is still booting (`user === null`,
+        // briefly during the `me` refetch); once it lands we pass a
+        // concrete `signedIn` boolean so the row picks the right shape.
+        signedIn={
+          cloud.user === null ? undefined : cloud.signedIn
+        }
+        userDisplayName={
+          cloud.signedIn && typeof cloud.user === "object" && cloud.user
+            ? cloud.user.display_name
+            : null
+        }
+        userEmail={
+          cloud.signedIn && typeof cloud.user === "object" && cloud.user
+            ? cloud.user.email
+            : null
+        }
+        onSignIn={() => setSignInOpen(true)}
+        onSignOut={() => {
+          void cloud.signOut();
+        }}
       />
 
       <div className="fishbones__body">
@@ -464,10 +668,20 @@ export default function App() {
           onLibrary={() => setView("library")}
           onSettings={() => setSettingsOpen(true)}
           onPlayground={() => setView("playground")}
+          onDocs={() => setView("docs")}
+          // Docs nav is rendered IN this Sidebar (replaces the
+          // course tree) when view === "docs", so we pass the same
+          // active-id state DocsView reads. Outside docs view we
+          // pass undefined so the sidebar reverts to course mode.
+          docsActiveId={view === "docs" ? docsActiveId : undefined}
+          onDocsSelect={setDocsActiveId}
           activeView={view}
           onExportCourse={exportCourse}
           onDeleteCourse={deleteCourseFromLibrary}
           onCourseSettings={(id) => setCourseSettingsId(id)}
+          onResetLesson={clearLessonCompletion}
+          onResetChapter={clearChapterCompletions}
+          onResetCourse={clearCourseCompletions}
         />
 
         <main className="fishbones__main">
@@ -478,10 +692,14 @@ export default function App() {
               history={history}
               stats={stats}
               onOpenLesson={selectLesson}
-              onGeneratePack={() => setGenPackOpen(true)}
             />
           ) : view === "playground" ? (
             <PlaygroundView />
+          ) : view === "docs" ? (
+            <DocsView
+              activeId={docsActiveId}
+              onActiveIdChange={setDocsActiveId}
+            />
           ) : view === "library" ? (
             // Library view — renders the inline CourseLibrary as the main
             // pane content (not as a modal overlay). DeferredMount paints
@@ -499,14 +717,20 @@ export default function App() {
                 hydrating={hydrating}
                 onDismiss={() => setView("courses")}
                 onOpen={(id) => openCourseFromLibrary(id)}
-                onImport={() => setImportOpen(true)}
-                onBulkImport={() => setBulkImportOpen(true)}
-                onDocsImport={() => setDocsImportOpen(true)}
-                onImportArchive={importCourseArchive}
-                onExport={exportCourse}
+                // Import / bulk-import / docs-crawl / archive-import
+                // all live behind Tauri commands (PDF parsing, file
+                // dialog, crawler, etc.). On the web build we pass
+                // `undefined` so CourseLibrary's optional-prop checks
+                // hide the corresponding buttons rather than calling
+                // an Anthropic-backed pipeline that can't run here.
+                onImport={isWeb ? undefined : () => setImportOpen(true)}
+                onBulkImport={isWeb ? undefined : () => setBulkImportOpen(true)}
+                onDocsImport={isWeb ? undefined : () => setDocsImportOpen(true)}
+                onImportArchive={isWeb ? undefined : importCourseArchive}
+                onExport={isWeb ? undefined : exportCourse}
                 onDelete={deleteCourseFromLibrary}
                 onSettings={(id) => setCourseSettingsId(id)}
-                onBulkExport={bulkExportLibrary}
+                onBulkExport={isWeb ? undefined : bulkExportLibrary}
               />
             </DeferredMount>
           ) : courses.length === 0 && coursesLoaded ? (
@@ -517,17 +741,28 @@ export default function App() {
                 </div>
                 <h1 className="fishbones__welcome-title">Welcome to Fishbones</h1>
                 <p className="fishbones__welcome-blurb">
-                  Turn any technical book into an interactive course. Pick a PDF
-                  to import, and Fishbones will split it into lessons, generate
-                  exercises, and let you code along chapter by chapter.
+                  {isWeb
+                    ? "A browser-native preview. Try the bundled lessons in JavaScript, Python, or Svelte — your progress saves locally and syncs to the cloud once you sign in."
+                    : "Turn any technical book into an interactive course. Pick a PDF to import, and Fishbones will split it into lessons, generate exercises, and let you code along chapter by chapter."}
                 </p>
                 <div className="fishbones__welcome-actions">
-                  <button
-                    className="fishbones__welcome-primary"
-                    onClick={() => setImportOpen(true)}
-                  >
-                    Import a PDF
-                  </button>
+                  {isWeb ? (
+                    <a
+                      className="fishbones__welcome-primary"
+                      href="https://github.com/InfamousVague/Kata/releases/latest"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Get the desktop app
+                    </a>
+                  ) : (
+                    <button
+                      className="fishbones__welcome-primary"
+                      onClick={() => setImportOpen(true)}
+                    >
+                      Import a PDF
+                    </button>
+                  )}
                   <button
                     className="fishbones__welcome-secondary"
                     onClick={() => setSettingsOpen(true)}
@@ -536,9 +771,9 @@ export default function App() {
                   </button>
                 </div>
                 <p className="fishbones__welcome-hint">
-                  You'll need an Anthropic API key in Settings for the AI-assisted
-                  structuring pipeline. Without one, imports fall back to simple
-                  section splits.
+                  {isWeb
+                    ? "Want to import your own PDFs, run C / C++ / Java / Swift, or use the offline AI? Grab the desktop app — it ships every runtime."
+                    : "You'll need an Anthropic API key in Settings for the AI-assisted structuring pipeline. Without one, imports fall back to simple section splits."}
                 </p>
               </div>
             </div>
@@ -557,14 +792,14 @@ export default function App() {
                 hydrating={hydrating}
                 onDismiss={() => { /* inline mode has no dismiss affordance */ }}
                 onOpen={(id) => openCourseFromLibrary(id)}
-                onImport={() => setImportOpen(true)}
-                onBulkImport={() => setBulkImportOpen(true)}
-                onDocsImport={() => setDocsImportOpen(true)}
-                onImportArchive={importCourseArchive}
-                onExport={exportCourse}
+                onImport={isWeb ? undefined : () => setImportOpen(true)}
+                onBulkImport={isWeb ? undefined : () => setBulkImportOpen(true)}
+                onDocsImport={isWeb ? undefined : () => setDocsImportOpen(true)}
+                onImportArchive={isWeb ? undefined : importCourseArchive}
+                onExport={isWeb ? undefined : exportCourse}
                 onDelete={deleteCourseFromLibrary}
                 onSettings={(id) => setCourseSettingsId(id)}
-                onBulkExport={bulkExportLibrary}
+                onBulkExport={isWeb ? undefined : bulkExportLibrary}
               />
             </DeferredMount>
           ) : activeLesson && activeCourse ? (
@@ -596,7 +831,13 @@ export default function App() {
         </main>
       </div>
 
-      {settingsOpen && <SettingsDialog onDismiss={() => setSettingsOpen(false)} />}
+      {settingsOpen && (
+        <SettingsDialog
+          cloud={cloud}
+          onDismiss={() => setSettingsOpen(false)}
+          onRequestSignIn={() => setSignInOpen(true)}
+        />
+      )}
 
 
       {genPackOpen && (
@@ -748,11 +989,42 @@ export default function App() {
           across library / lesson / playground / profile routes —
           same character, same conversation state. System prompt is
           rebuilt from the active lesson on each send(). */}
-      <AiAssistant
-        lesson={activeLesson}
-        course={activeCourse}
-        celebrateAt={celebrateAt}
-      />
+      {/* AI assistant is desktop-only for now — the streaming runs
+          via Tauri events from a local Ollama / Anthropic-via-Rust
+          path that doesn't have a web equivalent yet. Phase 4 will
+          re-enable this on web by streaming directly from
+          api.mattssoftware.com once the relay endpoints land. */}
+      {!isWeb && (
+        <AiAssistant
+          lesson={activeLesson}
+          course={activeCourse}
+          celebrateAt={celebrateAt}
+        />
+      )}
+
+      {/* Floating "get the desktop app" upsell — web-only. The
+          component self-gates on `isWeb` and a 30-day localStorage
+          dismissal, so on desktop this is a no-op render. */}
+      <InstallBanner />
+
+      {/* First-launch sign-in nudge. Self-gates on
+          `cloud.user === false` (= no token, not signed in) and on
+          a localStorage "permanent dismiss" flag, so this stays
+          quiet on every subsequent launch unless the user clicks
+          "Skip" without ticking the checkbox. */}
+      <FirstLaunchPrompt cloud={cloud} />
+
+      {/* Re-openable sign-in modal. Driven by the "Sign in" button in
+          the TopBar stats dropdown — separate from the first-launch
+          prompt above (which has a one-time-show gate of its own).
+          The dialog auto-closes on a successful OAuth deep-link round-
+          trip via its internal `awaitingOAuth` watcher. */}
+      {signInOpen && (
+        <SignInDialog
+          cloud={cloud}
+          onClose={() => setSignInOpen(false)}
+        />
+      )}
 
       {/* Cmd+K command palette. Searches across actions + every
           loaded course / lesson. Opening a lesson reuses the same
@@ -766,6 +1038,7 @@ export default function App() {
           openLibrary: () => setView("library"),
           openPlayground: () => setView("playground"),
           openProfile: () => setView("profile"),
+          openDocs: () => setView("docs"),
           openSettings: () => setSettingsOpen(true),
           importBook: () => setImportOpen(true),
           // Triggering "ask AI" from the palette dispatches the same
@@ -841,6 +1114,62 @@ function LessonView({
   // placeholder. Reset on lesson change via the parent's keyed remount.
   const [popped, setPopped] = useState(false);
 
+  // React Native courses route their preview through a SEPARATE OS
+  // window (the popped phone simulator) instead of a fixed bottom-
+  // pane OutputPane. When this is true, the lesson workbench renders
+  // the EditorPane full-width and the phone view lives in its own
+  // popout. We track an "open" boolean to remember whether the user
+  // last asked the popout to be on or off — the next Run auto-opens
+  // it, and the toggle button reopens it after dismissal.
+  const useFloatingPhone = courseLanguage === "reactnative";
+  // Scope keyed on lesson so two RN lessons in different tabs each
+  // get their own popout window + bus channel.
+  const phoneScope = `lesson:${courseId}:${lesson.id}`;
+  const [floatingPhoneOpen, setFloatingPhoneOpen] = useState<boolean>(() => {
+    if (typeof localStorage === "undefined") return true;
+    const v = localStorage.getItem("fishbones:floating-phone-open");
+    if (v === null) return true;
+    return v === "true";
+  });
+  useEffect(() => {
+    if (typeof localStorage === "undefined") return;
+    localStorage.setItem(
+      "fishbones:floating-phone-open",
+      floatingPhoneOpen ? "true" : "false",
+    );
+  }, [floatingPhoneOpen]);
+  // Bus the LessonView pushes preview URLs through. Memoised
+  // implicitly because makePhonePreviewBus is cheap; the popout
+  // listens with the matching scope.
+  const phoneBus = useFloatingPhone ? makePhonePreviewBus(phoneScope) : null;
+  // When the user closes the lesson tab or pops the workbench out,
+  // close the popout too — leaving an orphaned phone window for a
+  // lesson the user has stopped looking at is just confusing.
+  useEffect(() => {
+    if (!useFloatingPhone) return;
+    return () => {
+      void closePhonePopout(phoneScope);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [useFloatingPhone, phoneScope]);
+
+  // SvelteKit lessons keep a long-lived `vite dev` process under
+  // <app-data>/sveltekit-runs/<id>/. Stop it on lesson tab close
+  // so we don't leak Node processes across sessions. Idempotent —
+  // backend no-ops when nothing's running.
+  useEffect(() => {
+    const id = `${courseId}:${lesson.id}`;
+    return () => {
+      // Lazy-import to avoid loading the runtime module before
+      // it's needed (the SvelteKit runtime pulls in extra Tauri
+      // event-listener glue).
+      void import("./runtimes/sveltekit").then((m) =>
+        m.stopSvelteKit(id),
+      );
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [courseId, lesson.id]);
+
   // Proactive toolchain probe. When the lesson's language is one that
   // needs a local compiler (C / C++ / Java / Kotlin / C# / Assembly),
   // hit `probe_language_toolchain` on mount — matches the pattern
@@ -872,6 +1201,20 @@ function LessonView({
     if (!hasExercise) return;
     setRunning(true);
     setResult(null);
+    // Auto-pop the phone simulator open on every Run so a closed
+    // popout surfaces itself when the user actually has output to
+    // see. We open the OS window AND set the local "open" state so
+    // the toggle button hides and we remember the preference. The
+    // popout is idempotent — re-opening when already open just
+    // focuses the existing window.
+    if (useFloatingPhone) {
+      setFloatingPhoneOpen(true);
+      void openPhonePopout(phoneScope, lesson.title);
+      // Tell the popout we're working on a new run so it can swap
+      // to the "running…" placeholder instead of showing a stale
+      // preview iframe through the compile.
+      phoneBus?.emit({ type: "running" });
+    }
     try {
       const tests = "tests" in lesson ? lesson.tests : undefined;
       // Prefer the course's language when it's a whole-app runtime
@@ -888,7 +1231,17 @@ function LessonView({
         courseLanguage === "threejs"
           ? courseLanguage
           : lesson.language;
-      const r = await runFiles(effectiveLanguage, files, tests);
+      const r = await runFiles(
+        effectiveLanguage,
+        files,
+        tests,
+        undefined,
+        // Identity passed through to the SvelteKit runner so the
+        // long-lived `vite dev` process gets keyed per lesson —
+        // re-runs hot-reload the same server instead of spinning
+        // up a fresh project dir each time.
+        `${courseId}:${lesson.id}`,
+      );
       // Defensive guard: a runtime can theoretically resolve to
       // undefined (unknown language id slipping past the LanguageId
       // switch, an untyped IPC failure). Surface a friendly error
@@ -899,20 +1252,46 @@ function LessonView({
           error: `No runtime for language "${effectiveLanguage}".`,
           durationMs: 0,
         });
+        if (useFloatingPhone) {
+          phoneBus?.emit({
+            type: "console",
+            logs: [],
+            error: `No runtime for language "${effectiveLanguage}".`,
+          });
+        }
         return;
       }
       setResult(r);
       if (isPassing(r)) onComplete();
+      // Push the run outcome to the popped phone simulator. Preview
+      // URL when present (RN runtime hands one back from the local
+      // Tauri preview server); otherwise the captured logs + error
+      // so a failed run is at least readable inside the popout.
+      if (useFloatingPhone) {
+        if (r.previewUrl) {
+          phoneBus?.emit({ type: "preview", url: r.previewUrl });
+        } else {
+          phoneBus?.emit({
+            type: "console",
+            logs: r.logs ?? [],
+            error: r.error,
+          });
+        }
+      }
     } catch (e) {
       // Tauri IPC failures (missing command, serialization errors),
       // worker init failures — any thrown error from the runtime chain
       // lands here. Render it in the OutputPane so the user sees what
       // went wrong instead of a silent failed run.
+      const errMsg = e instanceof Error ? (e.stack ?? e.message) : String(e);
       setResult({
         logs: [],
-        error: e instanceof Error ? (e.stack ?? e.message) : String(e),
+        error: errMsg,
         durationMs: 0,
       });
+      if (useFloatingPhone) {
+        phoneBus?.emit({ type: "console", logs: [], error: errMsg });
+      }
     } finally {
       setRunning(false);
     }
@@ -1085,9 +1464,14 @@ function LessonView({
               onInstalled={() => setTcRefresh((n) => n + 1)}
             />
           )}
-          <Workbench
-            widthControlsParent
-            editor={
+          {useFloatingPhone ? (
+            // RN-course path — editor takes the full workbench width
+            // and the FloatingPhone modal carries the preview. We
+            // render the EditorPane inside a `solo` wrapper that
+            // matches the Workbench's card chrome so the visual
+            // weight stays consistent with the JS / Python lesson
+            // surfaces.
+            <div className="fishbones__lesson-workbench-solo">
               <EditorPane
                 language={lesson.language}
                 files={files}
@@ -1100,17 +1484,35 @@ function LessonView({
                 onRevealSolution={handleRevealSolution}
                 onPopOut={handlePopOut}
               />
-            }
-            output={
-              <OutputPane
-                result={result}
-                running={running}
-                suppressToolchainBanner={showLessonToolchainBanner}
-                language={lesson.language}
-                testsExpected={"tests" in lesson && !!lesson.tests?.trim()}
-              />
-            }
-          />
+            </div>
+          ) : (
+            <Workbench
+              widthControlsParent
+              editor={
+                <EditorPane
+                  language={lesson.language}
+                  files={files}
+                  activeIndex={activeFileIdx}
+                  onActiveIndexChange={setActiveFileIdx}
+                  onChange={handleFileChange}
+                  onRun={handleRun}
+                  hints={hints}
+                  onReset={handleReset}
+                  onRevealSolution={handleRevealSolution}
+                  onPopOut={handlePopOut}
+                />
+              }
+              output={
+                <OutputPane
+                  result={result}
+                  running={running}
+                  suppressToolchainBanner={showLessonToolchainBanner}
+                  language={lesson.language}
+                  testsExpected={"tests" in lesson && !!lesson.tests?.trim()}
+                />
+              }
+            />
+          )}
         </div>
       )}
       {hasExercise && popped && (
@@ -1124,6 +1526,38 @@ function LessonView({
           </span>
           <span>pop back in</span>
         </button>
+      )}
+
+      {/* Phone simulator for RN courses now lives in its own OS
+          window — opened lazily on first Run, or via this toggle
+          button at any time. The popout listens on
+          `makePhonePreviewBus(phoneScope)` for new preview URLs we
+          push from `handleRun`. The button sits permanently in the
+          corner because we can't reliably detect whether the user
+          closed the OS window (Tauri webview close events bubble
+          inconsistently across platforms), so the cheapest correct
+          UX is "always offer to re-open / focus". `openPhonePopout`
+          is idempotent — re-opening an already-open popout just
+          focuses it. */}
+      {useFloatingPhone && hasExercise && !popped && (
+        <PhoneToggleButton
+          onShow={() => {
+            setFloatingPhoneOpen(true);
+            void openPhonePopout(phoneScope, lesson.title);
+            // If we already have a result for this lesson, replay
+            // it into the popout so the freshly-opened window isn't
+            // empty until the next Run.
+            if (result?.previewUrl) {
+              phoneBus?.emit({ type: "preview", url: result.previewUrl });
+            } else if (result) {
+              phoneBus?.emit({
+                type: "console",
+                logs: result.logs ?? [],
+                error: result.error,
+              });
+            }
+          }}
+        />
       )}
     </div>
   );

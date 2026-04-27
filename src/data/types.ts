@@ -16,12 +16,19 @@ export type LanguageId =
   | "threejs"
   | "react"
   | "reactnative"
+  | "svelte"
+  | "solid"
+  | "htmx"
+  | "astro"
+  | "bun"
+  | "tauri"
   | "c"
   | "cpp"
   | "java"
   | "kotlin"
   | "csharp"
-  | "assembly";
+  | "assembly"
+  | "solidity";
 
 /// Difficulty tier for challenge-pack exercises. Courses' exercises don't
 /// set this — it's specific to the kata-style challenge packs that group
@@ -56,9 +63,12 @@ export type FileLanguage =
   | "kotlin"
   | "csharp"
   | "assembly"
+  | "solidity"
   | "html"
   | "css"
   | "json"
+  | "svelte"
+  | "markdown"
   | "plaintext";
 
 export interface WorkbenchFile {

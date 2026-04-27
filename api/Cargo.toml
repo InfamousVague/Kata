@@ -1,0 +1,62 @@
+[package]
+name = "fishbones-api"
+version = "0.1.0"
+edition = "2021"
+description = "Fishbones HTTP API — auth, course archives, progress sync"
+license = "MIT"
+
+[dependencies]
+# Web framework. Default features only — we don't need ws here; the
+# courses endpoint streams via response bodies, not sockets.
+axum = "0.7"
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Database (bundled SQLite — no system dep at deploy time).
+rusqlite = { version = "0.31", features = ["bundled"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Auth & crypto. Argon2id for password + token hashing; rand for the
+# secure random bytes mint_token / pkce_verifier feed off; sha2 for
+# the PKCE challenge digest; base64 for token encoding.
+argon2 = "0.5"
+rand = "0.8"
+base64 = "0.22"
+sha2 = "0.10"
+
+# JWT signing (Apple client_secret) + JWKS verification (Apple +
+# Google id_tokens). `jsonwebtoken` understands both ES256 and RS256.
+jsonwebtoken = "9"
+
+# OAuth network calls. rustls-tls instead of native-tls so the binary
+# is portable across the dev laptop (macOS) and the VPS (Debian)
+# without needing system OpenSSL.
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+# URL building (auth start endpoints + the deep-link return URL).
+url = "2"
+
+# Concurrent map for the in-flight OAuth-state cache.
+dashmap = "5"
+
+# Timestamps in serialized payloads.
+chrono = { version = "0.4", features = ["serde"] }
+
+# Errors / utilities
+thiserror = "1"
+anyhow = "1"
+once_cell = "1"
+uuid = { version = "1", features = ["v4"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Env loading from .env at startup
+dotenvy = "0.15"

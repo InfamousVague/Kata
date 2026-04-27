@@ -1,0 +1,67 @@
+name: Notify mattssoftware to rebuild
+
+# Cross-repo trigger: when this repo's main branch changes, fire a
+# `repository_dispatch` at InfamousVague/mattssoftware so its deploy
+# workflow re-runs and picks up the new web build. Without this,
+# Fishbones updates wouldn't show up at mattssoftware.com/fishbones/learn/
+# until either someone pushed to the marketing repo or the nightly
+# schedule fired.
+#
+# ─── One-time setup required ───────────────────────────────────────
+# Create a Personal Access Token (fine-grained, scoped to the
+# `mattssoftware` repo with `Actions: write` permission) and add it
+# to THIS repo (Fishbones) as a secret named MARKETING_DISPATCH_TOKEN.
+#
+#   gh secret set MARKETING_DISPATCH_TOKEN \
+#     --repo InfamousVague/Fishbones \
+#     --body "<your-PAT>"
+#
+# The default GITHUB_TOKEN can't dispatch into other repos, so the
+# PAT is unavoidable. Once the secret exists, this workflow is
+# zero-touch.
+on:
+  push:
+    branches: [main]
+    # Skip the dispatch when the only change is to the README or
+    # CI configuration — saves a marketing-site rebuild that
+    # wouldn't visibly change anything for users.
+    paths-ignore:
+      - "README.md"
+      - "**/*.md"
+      - ".github/**"
+      - "docs/**"
+  # Manual trigger when you want to force a rebuild without pushing
+  # (e.g. you fixed something on the marketing side and want to
+  # re-pull the current main).
+  workflow_dispatch:
+
+permissions:
+  # We don't need to read repo contents — we're just firing an
+  # external API call. The PAT carries the cross-repo permission.
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger mattssoftware deploy
+        env:
+          GH_TOKEN: ${{ secrets.MARKETING_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::MARKETING_DISPATCH_TOKEN secret not set — skipping dispatch."
+            echo "::warning::See workflow header for one-time setup instructions."
+            exit 0
+          fi
+          # The event_type is matched by the marketing repo's
+          # `repository_dispatch:` listener (`fishbones-updated`).
+          # Payload carries the head SHA so the marketing logs
+          # show which commit triggered the rebuild.
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            /repos/InfamousVague/mattssoftware/dispatches \
+            -f event_type=fishbones-updated \
+            -f 'client_payload[fishbones_sha]=${{ github.sha }}' \
+            -f 'client_payload[fishbones_ref]=${{ github.ref_name }}'
+          echo "Dispatched fishbones-updated to InfamousVague/mattssoftware (sha=${{ github.sha }})"

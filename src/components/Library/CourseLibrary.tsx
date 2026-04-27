@@ -3,9 +3,11 @@ import { Icon } from "@base/primitives/icon";
 import { libraryBig } from "@base/primitives/icon/icons/library-big";
 import "@base/primitives/icon/icon.css";
 import type { Course, LanguageId } from "../../data/types";
+import { isChallengePack } from "../../data/types";
 import BookCover from "./BookCover";
 import CourseContextMenu, { useCourseMenu } from "../Shared/CourseContextMenu";
 import FishbonesLoader from "../Shared/FishbonesLoader";
+import LanguageChip from "../LanguageChip/LanguageChip";
 import { prefetchCovers } from "../../hooks/useCourseCover";
 import "./CourseLibrary.css";
 
@@ -30,8 +32,9 @@ interface Props {
   hydrating?: Set<string>;
   onDismiss: () => void;
   onOpen: (courseId: string) => void;
-  /// Opens the PDF import wizard.
-  onImport: () => void;
+  /// Opens the PDF import wizard. Optional — hidden when the host
+  /// can't run the AI-assisted ingest pipeline (e.g. the web build).
+  onImport?: () => void;
   /// Opens the multi-PDF bulk import wizard — the learner can queue several
   /// books at once for unattended processing. Optional — hidden when the
   /// host app doesn't support bulk imports (e.g. web build).
@@ -117,6 +120,14 @@ export default function CourseLibrary({
   const isInline = mode === "inline";
   const ctxMenu = useCourseMenu();
   const [langFilter, setLangFilter] = useState<"all" | LanguageId>("all");
+  // Kind toggle — separate the two course archetypes the library
+  // mixes today: full-length books (chapter-major prose with
+  // exercises) vs handcrafted challenge packs (flat list of
+  // increasing-difficulty exercises). The default is "all" so a fresh
+  // visit shows everything; toggling restricts to one bucket.
+  const [kindFilter, setKindFilter] = useState<"all" | "books" | "challenges">(
+    "all",
+  );
   const [sortBy, setSortBy] = useState<SortKey>("name");
   const [query, setQuery] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>(loadInitialViewMode);
@@ -176,6 +187,11 @@ export default function CourseLibrary({
     const q = query.trim().toLowerCase();
     return enriched
       .filter((e) => langFilter === "all" || e.course.language === langFilter)
+      .filter((e) => {
+        if (kindFilter === "all") return true;
+        const isPack = isChallengePack(e.course);
+        return kindFilter === "challenges" ? isPack : !isPack;
+      })
       .filter((e) =>
         q === ""
           ? true
@@ -193,7 +209,7 @@ export default function CourseLibrary({
             return a.course.title.localeCompare(b.course.title);
         }
       });
-  }, [enriched, langFilter, sortBy, query]);
+  }, [enriched, langFilter, kindFilter, sortBy, query]);
 
   // Count courses per language so the filter chips can show badges and
   // hide languages with zero courses (unless they're the active filter).
@@ -204,6 +220,20 @@ export default function CourseLibrary({
     }
     return m;
   }, [enriched]);
+
+  // Count books vs challenges so the kind toggle can show badges. Only
+  // counts within the current language filter so the numbers track
+  // what's actually visible after the lang chip narrows the set.
+  const kindCounts = useMemo(() => {
+    let books = 0;
+    let challenges = 0;
+    for (const e of enriched) {
+      if (langFilter !== "all" && e.course.language !== langFilter) continue;
+      if (isChallengePack(e.course)) challenges += 1;
+      else books += 1;
+    }
+    return { books, challenges, all: books + challenges };
+  }, [enriched, langFilter]);
 
   // The panel content is identical in both modes; only the wrapper differs:
   // modal wraps with a full-viewport backdrop, inline just renders in place.
@@ -225,6 +255,7 @@ export default function CourseLibrary({
                 "Bulk import…" three times — the label answers "what do
                 these buttons do" once; each segment is just the NAME of
                 the thing being imported. */}
+            {onImport && (
             <div className="fishbones-library-import-group" role="group" aria-label="Import courses">
               <span className="fishbones-library-import-label">Import</span>
               <div className="fishbones-library-import-segmented">
@@ -264,6 +295,7 @@ export default function CourseLibrary({
                 )}
               </div>
             </div>
+            )}
             {onBulkExport && (
               <button
                 className="fishbones-library-bulk-export"
@@ -306,6 +338,63 @@ export default function CourseLibrary({
                 );
               })}
             </div>
+
+            {/* Kind toggle — All / Books / Challenges. Counts tracking
+                whatever the language filter has narrowed to, so a learner
+                who picks "Rust" and then clicks "Challenges" sees
+                only Rust challenges. The toggle is hidden when the
+                language-narrowed set has only one kind (no point in
+                offering a switch that does nothing). */}
+            {kindCounts.books > 0 && kindCounts.challenges > 0 && (
+              <div
+                className="fishbones-library-kind-toggle"
+                role="tablist"
+                aria-label="Filter by kind"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={kindFilter === "all"}
+                  className={`fishbones-library-kind ${
+                    kindFilter === "all" ? "fishbones-library-kind--active" : ""
+                  }`}
+                  onClick={() => setKindFilter("all")}
+                >
+                  All
+                  <span className="fishbones-library-kind-count">
+                    {kindCounts.all}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={kindFilter === "books"}
+                  className={`fishbones-library-kind ${
+                    kindFilter === "books" ? "fishbones-library-kind--active" : ""
+                  }`}
+                  onClick={() => setKindFilter("books")}
+                >
+                  Books
+                  <span className="fishbones-library-kind-count">
+                    {kindCounts.books}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={kindFilter === "challenges"}
+                  className={`fishbones-library-kind ${
+                    kindFilter === "challenges" ? "fishbones-library-kind--active" : ""
+                  }`}
+                  onClick={() => setKindFilter("challenges")}
+                >
+                  Challenges
+                  <span className="fishbones-library-kind-count">
+                    {kindCounts.challenges}
+                  </span>
+                </button>
+              </div>
+            )}
 
             <div className="fishbones-library-tools">
               <input
@@ -383,15 +472,25 @@ export default function CourseLibrary({
               </div>
               <div className="fishbones-library-empty-title">No courses yet</div>
               <div className="fishbones-library-empty-blurb">
-                Import your first book to get started. Fishbones splits a PDF
-                or EPUB into lessons and generates exercises with the Claude
-                API, or you can import a `.fishbones` course someone else
-                shared.
+                {onImport
+                  ? "Import your first book to get started. Fishbones splits a PDF or EPUB into lessons and generates exercises with the Claude API, or you can import a `.fishbones` course someone else shared."
+                  : "Sign in to sync courses from another device, or grab the desktop app to ingest your own books."}
               </div>
               <div className="fishbones-library-empty-actions">
-                <button className="fishbones-library-empty-primary" onClick={onImport}>
-                  Import a book…
-                </button>
+                {onImport ? (
+                  <button className="fishbones-library-empty-primary" onClick={onImport}>
+                    Import a book…
+                  </button>
+                ) : (
+                  <a
+                    className="fishbones-library-empty-primary"
+                    href="https://github.com/InfamousVague/Kata/releases/latest"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Get the desktop app
+                  </a>
+                )}
                 {onImportArchive && (
                   <button
                     className="fishbones-library-empty-secondary"
@@ -507,9 +606,7 @@ function CourseCard({
     <div className="fishbones-library-card" onContextMenu={onContextMenu}>
       <button className="fishbones-library-card-main" onClick={onOpen}>
         <div className="fishbones-library-card-header">
-          <span className={`fishbones-library-lang fishbones-library-lang--${course.language}`}>
-            {langBadge(course.language)}
-          </span>
+          <LanguageChip language={course.language} size="sm" />
           <span className="fishbones-library-card-status">{status}</span>
         </div>
         <div className="fishbones-library-card-title">{course.title}</div>
@@ -556,31 +653,3 @@ function CourseCard({
   );
 }
 
-function langBadge(language: LanguageId): string {
-  switch (language) {
-    case "javascript":
-      return "JS";
-    case "typescript":
-      return "TS";
-    case "python":
-      return "PY";
-    case "rust":
-      return "RS";
-    case "swift":
-      return "SW";
-    case "c":
-      return "C";
-    case "cpp":
-      return "C++";
-    case "java":
-      return "JV";
-    case "kotlin":
-      return "KT";
-    case "csharp":
-      return "C#";
-    case "assembly":
-      return "ASM";
-    default:
-      return String(language).slice(0, 2).toUpperCase();
-  }
-}

@@ -60,7 +60,15 @@ md.renderer.rules.fence = (tokens, idx) => {
   const infoParts = (token.info || "").trim().split(/\s+/);
   const lang = infoParts[0] || "text";
   const isPlayground = infoParts.slice(1).includes("playground");
-  const raw = token.content;
+  // Tutorial filename convention — Svelte's tutorial markdown (and a
+  // few others we've imported) prefixes every code fence with a
+  // `/// file: App.svelte` header line so the learner knows which
+  // file the snippet belongs to. Their official site renders that as
+  // a small filename strip above the code; we do the same. If we
+  // don't strip it, Shiki tries to highlight `/// file: …` as part
+  // of the source — at best it shows up as a bare comment-ish line,
+  // at worst (in Svelte's case) it confuses the grammar.
+  const { content: raw, filename } = extractFileHeader(token.content);
   // Base64-encode so the raw source survives HTML attribute quoting. It's
   // picked back up by the post-processor below and handed to Shiki.
   const b64 = typeof btoa === "function"
@@ -69,8 +77,26 @@ md.renderer.rules.fence = (tokens, idx) => {
   if (isPlayground) {
     return `<div class="fishbones-inline-sandbox" data-fishbones-lang="${escapeAttr(lang)}" data-fishbones-src="${b64}"></div>`;
   }
-  return `<pre class="fishbones-code-pending" data-fishbones-lang="${escapeAttr(lang)}" data-fishbones-src="${b64}"></pre>`;
+  const filenameAttr = filename
+    ? ` data-fishbones-filename="${escapeAttr(filename)}"`
+    : "";
+  return `<pre class="fishbones-code-pending" data-fishbones-lang="${escapeAttr(lang)}" data-fishbones-src="${b64}"${filenameAttr}></pre>`;
 };
+
+/// Detect a leading `/// file: <path>` header line on a code-fence
+/// payload, strip it, and return the cleaned content plus the
+/// filename. Used by the fence renderer to render filenames as a
+/// chrome strip above the code rather than as part of the syntax-
+/// highlighted body. Returns no filename when the convention isn't
+/// present, in which case the content is returned unchanged.
+function extractFileHeader(raw: string): { content: string; filename?: string } {
+  const match = /^\s*\/\/\/\s*file:\s*([^\n\r]+?)\s*(\r?\n|$)/.exec(raw);
+  if (!match) return { content: raw };
+  return {
+    content: raw.slice(match[0].length),
+    filename: match[1].trim(),
+  };
+}
 
 export interface RenderOptions {
   /// When provided, inline `<code>` tokens matching a `symbols[].pattern`
@@ -228,8 +254,13 @@ function renderCalloutBlock(kind: CalloutKind, bodyHtml: string): string {
 // ---------- Fenced code blocks --------------------------------------------
 
 async function replaceCodeFencePlaceholders(html: string): Promise<string> {
+  // Filename attr is optional — the regex makes the whole `data-
+  // fishbones-filename="…"` group optional with a `?`. Without that
+  // optionality, fences without a `/// file:` header would skip the
+  // placeholder pass entirely and render as raw `<pre>` with the
+  // pending class.
   const placeholderRe =
-    /<pre class="fishbones-code-pending" data-fishbones-lang="([^"]*)" data-fishbones-src="([^"]*)"><\/pre>/g;
+    /<pre class="fishbones-code-pending" data-fishbones-lang="([^"]*)" data-fishbones-src="([^"]*)"(?: data-fishbones-filename="([^"]*)")?><\/pre>/g;
 
   const chunks: string[] = [];
   let lastIndex = 0;
@@ -241,8 +272,9 @@ async function replaceCodeFencePlaceholders(html: string): Promise<string> {
 
     const lang = match[1];
     const b64 = match[2];
+    const filename = match[3] ? decodeAttr(match[3]) : undefined;
     const code = decodeB64(b64);
-    jobs.push(highlightCode(code, lang));
+    jobs.push(highlightCode(code, lang, filename));
     chunks.push(`__FISHBONES_CODE_${jobs.length - 1}__`);
   }
   chunks.push(html.slice(lastIndex));
@@ -255,7 +287,11 @@ async function replaceCodeFencePlaceholders(html: string): Promise<string> {
   return joined;
 }
 
-async function highlightCode(code: string, lang: string): Promise<string> {
+async function highlightCode(
+  code: string,
+  lang: string,
+  filename?: string,
+): Promise<string> {
   const trimmed = normalizeCodeBlock(code);
   // The "Ask Fishbones" badge dispatches a `fishbones:ask-ai` custom
   // event when clicked — the AiAssistant root listener picks it up,
@@ -266,11 +302,21 @@ async function highlightCode(code: string, lang: string): Promise<string> {
     ? btoa(unescape(encodeURIComponent(trimmed)))
     : Buffer.from(trimmed, "utf-8").toString("base64");
   const askBadge = `<button class="fishbones-code-block-ask" type="button" data-fishbones-ask-code="${escapeAttr(b64)}" data-fishbones-ask-lang="${escapeAttr(lang)}" title="Discuss this code with the local assistant" aria-label="Ask Fishbones about this code">?</button>`;
+  // Filename strip — small chrome above the code that surfaces the
+  // tutorial's `/// file: NAME` header without polluting the syntax-
+  // highlighted body. We also tag the wrapper div with
+  // `--with-filename` so CSS can adjust the inner radius / spacing.
+  const filenameStrip = filename
+    ? `<div class="fishbones-code-filename"><span>${escapeHtml(filename)}</span></div>`
+    : "";
+  const wrapperClass = filename
+    ? "fishbones-code-block fishbones-code-block--with-filename"
+    : "fishbones-code-block";
   try {
     const inner = await codeToHtml(trimmed, { lang, theme: SHIKI_THEME });
-    return `<div class="fishbones-code-block">${askBadge}${inner}</div>`;
+    return `<div class="${wrapperClass}">${filenameStrip}${askBadge}${inner}</div>`;
   } catch {
-    return `<div class="fishbones-code-block">${askBadge}<pre class="fishbones-code-plain">${escapeHtml(trimmed)}</pre></div>`;
+    return `<div class="${wrapperClass}">${filenameStrip}${askBadge}<pre class="fishbones-code-plain">${escapeHtml(trimmed)}</pre></div>`;
   }
 }
 
@@ -444,6 +490,18 @@ function escapeHtml(text: string): string {
 
 function escapeAttr(text: string): string {
   return escapeHtml(text).replace(/"/g, "&quot;");
+}
+
+/// Inverse of `escapeAttr` — decodes the four entities we encode on
+/// the way IN. Lets the placeholder pass recover original filenames
+/// (which can contain `&` / `<` / etc., though in practice they rarely
+/// do) before re-escaping for the rendered filename strip.
+function decodeAttr(text: string): string {
+  return text
+    .replace(/&quot;/g, '"')
+    .replace(/&gt;/g, ">")
+    .replace(/&lt;/g, "<")
+    .replace(/&amp;/g, "&");
 }
 
 function escapeForRegex(text: string): string {

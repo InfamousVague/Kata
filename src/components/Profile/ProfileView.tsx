@@ -4,42 +4,19 @@ import { flame } from "@base/primitives/icon/icons/flame";
 import { check } from "@base/primitives/icon/icons/check";
 import { sparkles } from "@base/primitives/icon/icons/sparkles";
 import { trophy } from "@base/primitives/icon/icons/trophy";
-import { swords } from "@base/primitives/icon/icons/swords";
 import "@base/primitives/icon/icon.css";
 import type { Course, LanguageId } from "../../data/types";
 import { isExerciseKind } from "../../data/types";
 import type { Completion } from "../../hooks/useProgress";
 import type { StreakAndXp } from "../../hooks/useStreakAndXp";
 import { ProgressRing } from "../Shared/ProgressRing";
+import LanguageChip from "../LanguageChip/LanguageChip";
 import "./ProfileView.css";
 
 /// Per-lesson XP — MUST stay in sync with useStreakAndXp. Kept duplicated
 /// (not imported) because that hook exports the computed totals, not the
 /// per-kind map. If we ever add a kind, update both in the same commit.
 const XP_PER_KIND = { reading: 5, quiz: 10, exercise: 20, mixed: 20 } as const;
-
-/// The complete roster of language chips we show. We only render a chip
-/// when the learner has touched that language (a completion exists in
-/// that course's language). Missing languages stay hidden so the card
-/// doesn't feel like a checklist of things the user hasn't done.
-const LANGUAGE_LABELS: Record<LanguageId, string> = {
-  javascript: "JavaScript",
-  typescript: "TypeScript",
-  python: "Python",
-  rust: "Rust",
-  swift: "Swift",
-  go: "Go",
-  web: "Web",
-  threejs: "Three.js",
-  react: "React",
-  reactnative: "React Native",
-  c: "C",
-  cpp: "C++",
-  java: "Java",
-  kotlin: "Kotlin",
-  csharp: "C#",
-  assembly: "Assembly",
-};
 
 const STAT_COLORS = {
   streak: "#ff9b5e",
@@ -56,21 +33,18 @@ interface Props {
   /// Called when the learner clicks a recent-activity row — jumps back to
   /// that lesson in courses view.
   onOpenLesson: (courseId: string, lessonId: string) => void;
-  /// Opens the challenge-pack generation dialog.
-  onGeneratePack: () => void;
 }
 
 /// Profile / stats page. Reads directly from the same sources the top-bar
 /// chip uses, but lays everything out as a dedicated surface instead of
 /// a dropdown — hero ring, per-language breakdown, topic buckets,
-/// recent-activity timeline, challenge-pack CTA.
+/// recent-activity timeline.
 export default function ProfileView({
   courses,
   completed,
   history,
   stats,
   onOpenLesson,
-  onGeneratePack,
 }: Props) {
   /// Build a lookup of `{courseId: course}` and flatten all lessons once
   /// so downstream math can resolve completions without nested scans.
@@ -267,12 +241,7 @@ export default function ProfileView({
                   return (
                     <div key={row.language} className="fishbones-profile-lang-card">
                       <div className="fishbones-profile-lang-head">
-                        <span className="fishbones-profile-lang-badge">
-                          {row.language.slice(0, 2).toUpperCase()}
-                        </span>
-                        <span className="fishbones-profile-lang-name">
-                          {LANGUAGE_LABELS[row.language]}
-                        </span>
+                        <LanguageChip language={row.language} size="md" />
                       </div>
                       <div className="fishbones-profile-lang-stats">
                         <div>
@@ -303,19 +272,11 @@ export default function ProfileView({
           )}
 
           {/* Topics — pulled only from challenge-pack lessons (they carry
-              the `topic` tag). Empty until the first pack is generated. */}
+              the `topic` tag). Empty until the user has worked through
+              some challenges. */}
           <section className="fishbones-profile-section">
             <div className="fishbones-profile-section-head">
               <h2 className="fishbones-profile-section-title">Topics practised</h2>
-              <button
-                className="fishbones-profile-cta"
-                onClick={onGeneratePack}
-              >
-                <span className="fishbones-profile-cta-icon" aria-hidden>
-                  <Icon icon={swords} size="xs" color="currentColor" />
-                </span>
-                Generate challenge pack…
-              </button>
             </div>
             {topicStats.length > 0 ? (
               <div className="fishbones-profile-topic-grid">

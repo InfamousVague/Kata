@@ -183,25 +183,6 @@
   gap: 8px;
 }
 
-.fishbones-profile-lang-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: var(--color-bg-tertiary);
-  color: var(--color-text-secondary);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-}
-
-.fishbones-profile-lang-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-
 .fishbones-profile-lang-stats {
   display: flex;
   justify-content: space-between;

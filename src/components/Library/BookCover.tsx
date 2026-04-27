@@ -1,6 +1,7 @@
 import type { Course, LanguageId } from "../../data/types";
 import { useCourseCover } from "../../hooks/useCourseCover";
 import FishbonesLoader from "../Shared/FishbonesLoader";
+import { languageMeta } from "../../lib/languages";
 import "./BookCover.css";
 
 interface Props {
@@ -40,6 +41,15 @@ export default function BookCover({
   // shared cache that prefetch populates — no extra IPC per card.
   const coverUrl = useCourseCover(course.id, course.coverFetchedAt);
   const hasCover = !!coverUrl;
+
+  // Brand-coloured language badge pinned to the top-right corner of
+  // every card. Shown over both real covers and the fallback tile so
+  // the language is recognizable at a glance even when the cover art
+  // is busy (a Python book might be a snake photo; a Rust book might
+  // be all-typography). The badge uses a frosted-dark backdrop so it
+  // reads against any cover.
+  const langMeta = languageMeta(course.language);
+  const LangIcon = langMeta.Icon;
 
   return (
     <button
@@ -100,6 +110,19 @@ export default function BookCover({
           </div>
         </>
       )}
+
+      {/* Language badge pinned to the top-right corner. Sits above the
+          cover gradient so it never gets faded out, but inset by a few
+          pixels from the card edge so it reads as a tag, not a sticker
+          falling off. */}
+      <span
+        className="fishbones-book-langbadge"
+        style={{ ["--book-langbadge-color" as string]: langMeta.color }}
+        title={langMeta.label}
+        aria-hidden
+      >
+        <LangIcon />
+      </span>
 
       {/* Progress bar along the very bottom edge. Doubles as the visual
           affordance for "how far you've read". Hidden entirely when
@@ -163,5 +186,19 @@ function langGlyph(lang: LanguageId): string {
       return "C#";
     case "assembly":
       return "ASM";
+    case "svelte":
+      return "SV";
+    case "solid":
+      return "SO";
+    case "htmx":
+      return "HX";
+    case "astro":
+      return "AS";
+    case "bun":
+      return "BN";
+    case "tauri":
+      return "TR";
+    case "solidity":
+      return "SOL";
   }
 }

@@ -22,6 +22,12 @@
      by 10px. */
   margin-left: 10px;
   background: var(--color-bg-secondary);
+  /* Match the sidebar's edge treatment exactly — same rgba-7%-white
+     rim, same radius, same fill. The earlier inset-shadow attempt was
+     keyed to `--color-bg-primary` to dodge "weird white" feedback,
+     but that blended too far into the page and the card edge
+     disappeared entirely. Sidebar uses this pattern with no
+     complaints, so we reuse it here for visual consistency. */
   border: 1px solid var(--color-border-default);
   border-radius: 12px;
   overflow: hidden;

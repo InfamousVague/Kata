@@ -2,10 +2,11 @@
   "$schema": "../gen/schemas/capability.json",
   "identifier": "default",
   "description": "Default permissions for the Fishbones app",
-  "windows": ["main", "workbench-*"],
+  "windows": ["main", "workbench-*", "phone-*"],
   "permissions": [
     "core:default",
     "opener:default",
+    "deep-link:default",
     "dialog:default",
     "core:webview:allow-create-webview-window",
     "core:webview:allow-get-all-webviews",

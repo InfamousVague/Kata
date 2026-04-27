@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { isWeb } from "../lib/platform";
 
 /// Everything the `MissingToolchainBanner` needs to render the install
 /// affordance. Mirrors `toolchain::InstallHint` in the Rust side.
@@ -45,6 +46,16 @@ export function useToolchainStatus(language: string, cacheBust: number = 0) {
 
   useEffect(() => {
     if (!language) {
+      setStatus(null);
+      setLoading(false);
+      return;
+    }
+    if (isWeb) {
+      // Web build: there's no local toolchain to probe (the gate in
+      // runtimes/index.ts already short-circuits desktop-only langs
+      // to a `desktopOnly` RunResult). Set null so the
+      // MissingToolchainBanner's `installed: !!status` check stays
+      // false and it doesn't render at all.
       setStatus(null);
       setLoading(false);
       return;

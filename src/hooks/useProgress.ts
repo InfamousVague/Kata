@@ -1,20 +1,18 @@
 import { useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { storage, type Completion } from "../lib/storage";
 
-export interface Completion {
-  course_id: string;
-  lesson_id: string;
-  /// Unix timestamp (seconds) when the learner completed the lesson.
-  completed_at: number;
-}
+export type { Completion };
 
-/// Syncs the "completed lessons" Set to a SQLite table in the app data dir
-/// via Tauri commands. The Set is the source of truth while the app is open;
-/// on first mount we rehydrate from the DB, and markCompleted writes through.
-/// `history` gives the same data as a timestamped array, for streak / XP math.
+/// Syncs the "completed lessons" Set to the active storage backend
+/// (SQLite via Tauri on desktop, IndexedDB on web). The Set is the
+/// source of truth while the app is open; on first mount we
+/// rehydrate from storage, and markCompleted writes through.
+/// `history` gives the same data as a timestamped array, for
+/// streak / XP math.
 ///
-/// Falls back gracefully when not running under Tauri (e.g. vitest / running
-/// `vite` standalone) so tests can mount components that use this hook.
+/// Falls back gracefully when storage throws (e.g. older Tauri DB
+/// migration mid-flight, IndexedDB unavailable in private mode) so
+/// the UI still renders and lets the learner read.
 export function useProgress() {
   const [completed, setCompleted] = useState<Set<string>>(new Set());
   const [history, setHistory] = useState<Completion[]>([]);
@@ -24,14 +22,15 @@ export function useProgress() {
     let cancelled = false;
     (async () => {
       try {
-        const rows = await invoke<Completion[]>("list_completions");
+        const rows = await storage.listCompletions();
         if (cancelled) return;
         const s = new Set<string>();
         for (const r of rows) s.add(`${r.course_id}:${r.lesson_id}`);
         setCompleted(s);
         setHistory(rows);
       } catch {
-        // Not in Tauri or DB unavailable — stay with the empty set.
+        // Storage unavailable — stay with the empty set so the UI
+        // renders. Reads-only behaviour for the session.
       } finally {
         if (!cancelled) setLoaded(true);
       }
@@ -51,7 +50,7 @@ export function useProgress() {
     });
     // Also append to the local history so streak/XP react instantly without
     // waiting for a re-fetch. Uses client-side now() which may drift from
-    // the DB's server-side now() by a second; harmless for stats display.
+    // the server-side now() by a second; harmless for stats display.
     setHistory((prev) => {
       if (prev.some((r) => r.course_id === courseId && r.lesson_id === lessonId)) return prev;
       return [
@@ -64,9 +63,76 @@ export function useProgress() {
       ];
     });
     // Fire-and-forget persistence; the optimistic UI update above already
-    // reflects the new state, and the DB is best-effort.
-    invoke("mark_completion", { courseId, lessonId }).catch(() => {});
+    // reflects the new state, and storage is best-effort.
+    storage.markCompletion(courseId, lessonId).catch(() => {});
   }
 
-  return { completed, history, markCompleted, loaded };
+  /// Reset a single lesson's completion. Drops the key from the in-memory
+  /// Set and history array immediately so progress rings update without
+  /// a re-fetch, then fires the matching storage delete.
+  function clearLessonCompletion(courseId: string, lessonId: string) {
+    const key = `${courseId}:${lessonId}`;
+    setCompleted((prev) => {
+      if (!prev.has(key)) return prev;
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
+    });
+    setHistory((prev) =>
+      prev.filter((r) => !(r.course_id === courseId && r.lesson_id === lessonId)),
+    );
+    storage.clearLessonCompletion(courseId, lessonId).catch(() => {});
+  }
+
+  /// Reset every lesson in a chapter. We don't have a chapter id in the schema
+  /// (completions are flat per-lesson) so the caller passes in the list of
+  /// lesson_ids that belong to the chapter. Local state updates happen in one
+  /// batched setState; the storage deletes are fired in parallel.
+  function clearChapterCompletions(courseId: string, lessonIds: string[]) {
+    if (lessonIds.length === 0) return;
+    const keys = new Set(lessonIds.map((id) => `${courseId}:${id}`));
+    const lessonIdSet = new Set(lessonIds);
+    setCompleted((prev) => {
+      let mutated = false;
+      const next = new Set(prev);
+      for (const k of keys) {
+        if (next.delete(k)) mutated = true;
+      }
+      return mutated ? next : prev;
+    });
+    setHistory((prev) =>
+      prev.filter(
+        (r) => !(r.course_id === courseId && lessonIdSet.has(r.lesson_id)),
+      ),
+    );
+    storage.clearChapterCompletions(courseId, lessonIds).catch(() => {});
+  }
+
+  /// Reset every completion for a course. Single command call instead of
+  /// per-lesson fan-out — the backend has a course-scoped DELETE.
+  function clearCourseCompletions(courseId: string) {
+    setCompleted((prev) => {
+      let mutated = false;
+      const next = new Set(prev);
+      for (const k of prev) {
+        if (k.startsWith(`${courseId}:`)) {
+          next.delete(k);
+          mutated = true;
+        }
+      }
+      return mutated ? next : prev;
+    });
+    setHistory((prev) => prev.filter((r) => r.course_id !== courseId));
+    storage.clearCourseCompletions(courseId).catch(() => {});
+  }
+
+  return {
+    completed,
+    history,
+    markCompleted,
+    clearLessonCompletion,
+    clearChapterCompletions,
+    clearCourseCompletions,
+    loaded,
+  };
 }

@@ -1,5 +1,11 @@
+// Side-effect import: wires `self.MonacoEnvironment` and points
+// `@monaco-editor/react`'s loader at our bundled Monaco instance. MUST come
+// before the `@monaco-editor/react` import below so the loader is
+// configured before any Editor component mounts. See monaco-setup.ts for
+// the full rationale (signed-production CDN-load issue).
+import "../../lib/monaco-setup";
 import { useState } from "react";
-import Editor, { loader } from "@monaco-editor/react";
+import Editor from "@monaco-editor/react";
 import { Icon } from "@base/primitives/icon";
 import { arrowLeft } from "@base/primitives/icon/icons/arrow-left";
 import { arrowRight } from "@base/primitives/icon/icons/arrow-right";
@@ -9,16 +15,12 @@ import { useActiveTheme } from "../../theme/useActiveTheme";
 import { MONACO_THEME_BY_APP_THEME, registerMonacoThemes } from "../../theme/monaco-themes";
 import "./EditorPane.css";
 
-// Point Monaco's loader at a CDN so Vite doesn't try to bundle the workers.
-// Tauri's webview will fetch them on first load.
-loader.config({ paths: { vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs" } });
-
-// Once the loader resolves, register our custom themes globally. Doing this
-// here (rather than per-EditorPane-mount) means themes are ready before the
-// first `<Editor theme=...>` evaluates, so the initial paint doesn't flash
-// vs-dark before our theme applies.
+// Themes + ambient CommonJS decls are still applied per-mount via
+// `beforeMount` below — `defineTheme` and `addExtraLib` are idempotent
+// keyed by name, so the duplicate calls are cheap and ensure our
+// customizations are in place before the first paint.
 //
-// We also declare CommonJS globals (`module`, `exports`, `require`) as an
+// We declare CommonJS globals (`module`, `exports`, `require`) as an
 // ambient type-lib so Monaco's TypeScript language service stops flagging
 // `module.exports = { ... }` in exercise starters. Fishbones' JS/TS
 // lessons use the CommonJS module pattern (the test harness does
@@ -28,10 +30,6 @@ loader.config({ paths: { vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/
 // Declaring them as `any` here tells the language service they exist
 // without forcing us to pull in `@types/node` (which would bring hundreds
 // of other globals the lessons shouldn't care about).
-loader.init().then((monaco) => {
-  registerMonacoThemes(monaco);
-  addCommonJsAmbientDecls(monaco);
-});
 
 const COMMONJS_AMBIENT = `
 // Fishbones ambient declarations — keeps the learner's CommonJS-style
@@ -119,6 +117,21 @@ const MONACO_LANGUAGES: Record<FileLanguage, string> = {
   html: "html",
   css: "css",
   json: "json",
+  // Svelte uses our hand-rolled Monarch grammar (lib/monaco-svelte.ts)
+  // registered via lib/monaco-setup.ts. The id matches what
+  // setMonarchTokensProvider was registered against — without this
+  // mapping `.svelte` files render as plaintext even though the
+  // grammar exists.
+  svelte: "svelte",
+  // Solidity uses a hand-rolled Monarch grammar (lib/monaco-solidity.ts)
+  // registered via lib/monaco-setup.ts. Monaco doesn't ship a Solidity
+  // language built in, so without this mapping `.sol` files would
+  // render as plaintext.
+  solidity: "solidity",
+  // Monaco's built-in markdown is fine for lesson-body fragments
+  // (.md files in mixed-lesson file sets) — wire it up so the
+  // editor doesn't fall through to plaintext on those.
+  markdown: "markdown",
   plaintext: "plaintext",
 };
 

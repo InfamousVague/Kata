@@ -34,6 +34,16 @@ export interface RunResult {
   /// instead of a wall of red stderr. Unset for browser-hosted runtimes
   /// (JS/TS/Python) where there's no toolchain to miss.
   missingToolchainLanguage?: string;
+  /// Set by `runCode` / `runFiles` on the WEB build when the user
+  /// tried to run a language whose runtime needs the desktop app
+  /// (system compiler for C/C++/Java/Kotlin/C#/Asm/Swift, or the
+  /// bundled Node sidecar for SvelteKit). Carries the language id +
+  /// a one-line reason; OutputPane renders the desktop upsell instead
+  /// of running the code. Always unset on the desktop build.
+  desktopOnly?: {
+    language: string;
+    reason: string;
+  };
 }
 
 export interface LogLine {

@@ -1,0 +1,351 @@
+/* Sign-in modal — same backdrop / panel pattern as ConfirmDialog,
+   themed via Fishbones' shared `--color-*` variables so it picks up
+   whichever of the 17 themes the user is on. */
+
+.fishbones-signin-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(3px);
+  display: grid;
+  place-items: center;
+  z-index: 200;
+  animation: fishbones-signin-fade 0.16s ease-out;
+}
+
+@keyframes fishbones-signin-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.fishbones-signin-panel {
+  position: relative;
+  width: min(440px, 92vw);
+  max-height: 92vh;
+  overflow-y: auto;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-default);
+  border-radius: 14px;
+  padding: 28px 28px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.fishbones-signin-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  background: none;
+  border: 0;
+  color: var(--color-text-tertiary);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 6px;
+}
+.fishbones-signin-close:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-tertiary);
+}
+
+.fishbones-signin-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: var(--color-text-primary);
+}
+.fishbones-signin-blurb {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--color-text-secondary);
+}
+
+/* Provider tabs (Email · Apple · Google) */
+.fishbones-signin-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border-default);
+  border-radius: 10px;
+  margin-top: 4px;
+}
+.fishbones-signin-tab {
+  flex: 1;
+  padding: 8px 12px;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.fishbones-signin-tab:hover { color: var(--color-text-primary); }
+/* Active tab — filled with the primary text colour (white in dark
+   themes), label inverted to the bg colour. The previous treatment
+   used `--color-bg-tertiary` which is barely a few percent above the
+   surrounding panel so the active state was almost invisible. */
+.fishbones-signin-tab--active,
+.fishbones-signin-tab--active:hover {
+  background: var(--color-text-primary);
+  color: var(--color-bg-primary);
+}
+
+/* Inner mode toggle for the Email tab — sign in vs create account. */
+.fishbones-signin-mode-toggle {
+  display: inline-flex;
+  align-self: center;
+  gap: 0;
+  padding: 2px;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border-default);
+  border-radius: 999px;
+  margin-bottom: 6px;
+}
+.fishbones-signin-mode-btn {
+  padding: 6px 14px;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  color: var(--color-text-tertiary);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.fishbones-signin-mode-btn--active {
+  background: var(--color-text-primary);
+  color: var(--color-bg-primary);
+}
+
+.fishbones-signin-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fishbones-signin-helper {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-text-tertiary);
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border-default);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.fishbones-signin-helper code {
+  font-family: "SF Mono", ui-monospace, Menlo, monospace;
+  font-size: 11.5px;
+  background: var(--color-bg-tertiary);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.fishbones-signin-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.fishbones-signin-field > span {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+}
+.fishbones-signin-field input,
+.fishbones-signin-field textarea {
+  padding: 9px 11px;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border-default);
+  border-radius: 8px;
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: 13px;
+}
+.fishbones-signin-field textarea {
+  font-family: "SF Mono", ui-monospace, Menlo, monospace;
+  font-size: 11.5px;
+  resize: vertical;
+}
+.fishbones-signin-field input:focus,
+.fishbones-signin-field textarea:focus {
+  outline: none;
+  border-color: var(--color-border-strong);
+}
+.fishbones-signin-field small {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+
+.fishbones-signin-primary {
+  margin-top: 4px;
+  padding: 10px 18px;
+  background: var(--color-text-primary);
+  color: var(--color-bg-primary);
+  border: 0;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.fishbones-signin-primary:hover:not(:disabled) {
+  opacity: 0.92;
+}
+.fishbones-signin-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.fishbones-signin-error {
+  margin: 4px 0 0;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: #ef6f6f;
+  background: rgba(239, 111, 111, 0.08);
+  border: 1px solid rgba(239, 111, 111, 0.3);
+  border-radius: 6px;
+}
+
+/* OAuth panel — replaces the old paste-mode form for Apple + Google.
+   Single primary button per provider, plus a "waiting" affordance once
+   the system browser has been kicked off. */
+.fishbones-signin-oauth {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Apple's HIG specifies black + white text + their wordmark for SIWA
+   buttons. We don't ship the wordmark glyph (it's a licensed asset and
+   the alternative is a wordmark string that the system font can't
+   render correctly), so the button uses a clean black-pill text-only
+   treatment that still reads as "Apple-branded" without overstepping.
+
+   Google's identity-services button uses white background + their "G"
+   mark + dark text, with a 1px neutral stroke. We render the G as
+   inline SVG so it themes consistently across the app. */
+.fishbones-signin-oauth-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 11px 18px;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.1px;
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.05s ease;
+}
+.fishbones-signin-oauth-btn:hover:not(:disabled) {
+  opacity: 0.92;
+}
+.fishbones-signin-oauth-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.fishbones-signin-oauth-btn:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+
+.fishbones-signin-oauth-btn--apple {
+  background: #000;
+  color: #fff;
+  border: 1px solid #000;
+}
+
+.fishbones-signin-oauth-btn--google {
+  /* Google's button stays light even in dark themes — that's the
+     branded treatment they specify in the GIS guidelines. */
+  background: #fff;
+  color: #1f1f1f;
+  border: 1px solid #dadce0;
+}
+
+.fishbones-signin-oauth-glyph {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+.fishbones-signin-oauth-btn--apple .fishbones-signin-oauth-glyph {
+  /* Slight optical-balance bump for the Apple symbol — the glyph reads
+     a hair small at 18px next to the text. */
+  font-size: 18px;
+  line-height: 1;
+  margin-top: -2px;
+}
+
+.fishbones-signin-oauth-waiting {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-primary);
+  border: 1px dashed var(--color-border-default);
+  border-radius: 8px;
+  padding: 9px 12px;
+  text-align: center;
+}
+
+.fishbones-signin-skip {
+  align-self: center;
+  margin-top: 6px;
+  background: none;
+  border: 0;
+  color: var(--color-text-tertiary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+.fishbones-signin-skip:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-tertiary);
+}
+
+/* "Don't show this again" sits below the modal — the FirstLaunchPrompt
+   keeps it as a sibling so it's visible at the same time as the
+   Skip button without crowding the panel's body. */
+.fishbones-firstlaunch-dontshow {
+  position: fixed;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 201;
+  padding: 8px 14px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-default);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+}
+.fishbones-firstlaunch-dontshow label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.fishbones-firstlaunch-dontshow input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--color-text-primary);
+}

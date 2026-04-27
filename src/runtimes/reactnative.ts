@@ -1,6 +1,6 @@
-import { invoke } from "@tauri-apps/api/core";
 import type { WorkbenchFile } from "../data/types";
 import type { RunResult } from "./types";
+import { presentPreview } from "../lib/preview";
 
 /// React Native runtime — assembles an HTML shell that pulls in React,
 /// ReactDOM, and react-native-web from esm.sh + @babel/standalone from
@@ -15,7 +15,25 @@ import type { RunResult } from "./types";
 /// the "see it in a real simulator / Expo Go" story, but those require
 /// Xcode + Node tooling on the host.
 
-export async function runReactNative(files: WorkbenchFile[]): Promise<RunResult> {
+/// Resolved theme tokens used by the runtime to style the iframe's
+/// page chrome AND make CSS custom properties available to user code
+/// inside the preview. The keys are deliberately short — they end up
+/// in the iframe's `:root { --<key>: ... }` rule and learners can
+/// reference them via `'var(--<key>)'` inside `StyleSheet.create`.
+export interface ReactNativePreviewTheme {
+  bgPrimary: string;
+  bgSecondary: string;
+  bgTertiary: string;
+  textPrimary: string;
+  textSecondary: string;
+  textTertiary: string;
+  borderDefault: string;
+}
+
+export async function runReactNative(
+  files: WorkbenchFile[],
+  theme?: Partial<ReactNativePreviewTheme>,
+): Promise<RunResult> {
   const started = Date.now();
 
   // Pick the primary source. Conventionally the starter template uses
@@ -27,17 +45,9 @@ export async function runReactNative(files: WorkbenchFile[]): Promise<RunResult>
     files[0]?.content ??
     "";
 
-  const html = buildPreviewHtml(source);
+  const html = buildPreviewHtml(source, theme ?? {});
 
-  let previewUrl: string | undefined;
-  try {
-    const handle = await invoke<{ url: string }>("serve_web_preview", {
-      html,
-    });
-    previewUrl = handle.url;
-  } catch {
-    previewUrl = undefined;
-  }
+  const previewUrl = await presentPreview(html);
 
   return {
     logs: [],
@@ -47,11 +57,30 @@ export async function runReactNative(files: WorkbenchFile[]): Promise<RunResult>
   };
 }
 
+/// Default fallback colours used when the caller doesn't pass a
+/// theme. Picks a neutral dark palette so the preview is legible
+/// before we know which app theme is active.
+const DEFAULT_PREVIEW_THEME: ReactNativePreviewTheme = {
+  bgPrimary: "#0b0b10",
+  bgSecondary: "#15151c",
+  bgTertiary: "#1f1f28",
+  textPrimary: "#f5f5f7",
+  textSecondary: "#a4a4ad",
+  textTertiary: "#71717a",
+  borderDefault: "rgba(255, 255, 255, 0.08)",
+};
+
 /// Construct the standalone HTML that hosts the learner's component.
 /// Deliberately inlines everything (CDN script tags + user source
 /// base64-encoded) so the preview server can serve a single document
 /// with no fetches of its own beyond the CDN bundles.
-function buildPreviewHtml(userSource: string): string {
+function buildPreviewHtml(
+  userSource: string,
+  theme: Partial<ReactNativePreviewTheme>,
+): string {
+  // Fill in any caller-omitted slots with the dark default so the
+  // template's `var(--rn-bg)` references always resolve.
+  const t: ReactNativePreviewTheme = { ...DEFAULT_PREVIEW_THEME, ...theme };
   // Base64 the user source so we don't fight escape-in-template-in-
   // template edge cases (backticks, `${}`, nested quotes). Eval-time we
   // decode via atob.
@@ -67,11 +96,25 @@ function buildPreviewHtml(userSource: string): string {
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
   <title>Fishbones — React Native preview</title>
   <style>
+    /* Live theme tokens propagated from the parent app. The default
+       template references these via 'var(--rn-bg-primary)' etc., and
+       react-native-web passes the value through to the rendered
+       stylesheet untouched — so the preview adopts whichever Fishbones
+       theme is active when Run was clicked. */
+    :root {
+      --rn-bg-primary: ${t.bgPrimary};
+      --rn-bg-secondary: ${t.bgSecondary};
+      --rn-bg-tertiary: ${t.bgTertiary};
+      --rn-text-primary: ${t.textPrimary};
+      --rn-text-secondary: ${t.textSecondary};
+      --rn-text-tertiary: ${t.textTertiary};
+      --rn-border-default: ${t.borderDefault};
+    }
     html, body, #root { margin: 0; padding: 0; height: 100%; width: 100%; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
-      background: #0b0b10;
-      color: #f5f5f7;
+      background: var(--rn-bg-primary);
+      color: var(--rn-text-primary);
       -webkit-font-smoothing: antialiased;
     }
     #__fishbones_error {
@@ -85,19 +128,71 @@ function buildPreviewHtml(userSource: string): string {
       z-index: 999;
     }
   </style>
-  <!-- Classic script: exposes \`Babel\` globally. Version pinned to a
-       known-good @babel/standalone release. -->
-  <script src="https://unpkg.com/@babel/standalone@7.24.0/babel.min.js"
-          crossorigin="anonymous"></script>
+  <!-- Babel standalone, served from the local Tauri preview server's
+       /vendor route. Same file the CDN used to ship — but bundled
+       once at build time and read from the shipped resources dir, so
+       Fishbones works fully offline. -->
+  <script src="/vendor/babel.min.js"></script>
 </head>
 <body>
+  <!-- Boot marker — shown immediately as the HTML body parses, hidden
+       once the React mount commits its first paint into #root. If this
+       is still visible after a Run, we know the runtime got blocked
+       BEFORE React rendered (CSP blocking the CDN imports, network
+       failure to esm.sh/unpkg, parse error in the user code, etc.).
+       If this is gone but the screen is still blank, React mounted but
+       produced nothing — usually a styling/layout problem. -->
+  <div id="__fishbones_boot"
+       style="position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; color: #6a6a78; font: 12px/1.5 'SF Mono', ui-monospace, Menlo, monospace; text-align: center; pointer-events: none; opacity: 0.7;">
+    booting react-native-web preview…
+  </div>
   <div id="root"></div>
   <script type="module">
     ${CONSOLE_SHIM}
-    import React from "https://esm.sh/react@18.2.0";
-    import * as ReactNative from "https://esm.sh/react-native-web@0.19.12?deps=react@18.2.0,react-dom@18.2.0";
 
-    const { AppRegistry } = ReactNative;
+    /// Wrap the whole pipeline (imports + transform + mount) in a
+    /// single async function with a top-level try/catch, so that an
+    /// import failure (CDN unreachable, parse error in the bundle,
+    /// CSP block) surfaces in our error overlay instead of silently
+    /// terminating the module. Top-level static \`import\` statements
+    /// don't fire any catchable event when they fail — the whole
+    /// module just never runs, leaving the boot marker stuck on
+    /// screen with no clue why.
+    /// Update the boot marker's text so a stuck pipeline tells us
+    /// WHICH stage stalled instead of just "booting…" forever.
+    function bootStage(text) {
+      const el = document.getElementById("__fishbones_boot");
+      if (el) el.textContent = text;
+    }
+
+    bootStage("module script started — loading vendored bundles…");
+
+    (async function bootPreview() {
+    let React, createRoot, ReactNative, AppRegistry;
+    try {
+      bootStage("loading react…");
+      // Vendored bundles served from the local Tauri preview server's
+      // /vendor route. No CDN traffic — scripts/vendor-cdn-deps.mjs
+      // bakes these out of node_modules at build time.
+      const reactMod = await import("/vendor/react.js");
+      React = reactMod.default || reactMod;
+      bootStage("loading react-dom…");
+      const reactDom = await import("/vendor/react-dom-client.js");
+      createRoot = reactDom.createRoot;
+      bootStage("loading react-native-web…");
+      ReactNative = await import("/vendor/react-native-web.js");
+      AppRegistry = ReactNative.AppRegistry;
+      bootStage("vendored bundles ready, transforming user code…");
+    } catch (err) {
+      showPhaseError(
+        "imports",
+        err,
+        "Couldn't load the vendored React + react-native-web bundles.\\n" +
+          "Check that scripts/vendor-cdn-deps.mjs ran during the build."
+      );
+      console.error("[imports]", err);
+      return;
+    }
 
     const source = atob("${sourceB64}");
 
@@ -111,6 +206,24 @@ function buildPreviewHtml(userSource: string): string {
       .replace(/^\\s*export\\s+default\\s+class/m, "class")
       .replace(/^\\s*export\\s+default\\s+/m, "const __appExport = ")
       .replace(/^\\s*export\\s+/gm, "");
+
+    // Pull every capitalised top-level function / class / const
+    // identifier out of the cleaned source so the factory can fall
+    // back to "first capitalised thing in scope" when the learner
+    // doesn't name their component App or use a default export. The
+    // regex is intentionally loose — false positives are harmless
+    // (we typeof-check inside the factory before using a name) and
+    // a stricter parse here would drag a real AST library into the
+    // iframe just for one fallback heuristic.
+    const __candidateNames = [];
+    {
+      const idRe = /(?:^|\\n)\\s*(?:function|class|const|let|var)\\s+([A-Z][A-Za-z0-9_]*)/g;
+      let m;
+      const seen = new Set();
+      while ((m = idRe.exec(cleaned)) !== null) {
+        if (!seen.has(m[1])) { seen.add(m[1]); __candidateNames.push(m[1]); }
+      }
+    }
 
     // Three phases, three separate try blocks — so a Babel parse error
     // (user code has bad JS), a new-Function construction error (our
@@ -170,8 +283,46 @@ function buildPreviewHtml(userSource: string): string {
           "  useColorScheme, useWindowDimensions, processColor,",
           "} = ReactNative;",
           "return (function __fishbonesUserModule() {",
+          // CommonJS-shape shim so source that includes a CommonJS
+          // export line (module.exports = { Foo }) — e.g. solutions
+          // from the logic-test challenge packs that get routed here
+          // when the language is reactnative — doesn't crash with
+          // "ReferenceError: Can't find variable: module". Whatever
+          // gets assigned is ignored; we only look for App or
+          // __appExport in the closure scope below.
+          "  const module = { exports: {} };",
+          "  const exports = module.exports;",
+          // Inline the candidate-name list so the fallback resolver
+          // below knows which identifiers to typeof-check. Names
+          // come from the regex scan against the cleaned source
+          // above — they're plain capitalised identifiers, no need
+          // to escape them, but we JSON.stringify the array anyway
+          // for belt-and-suspenders quoting.
+          "  const __candidateNames = " + JSON.stringify(__candidateNames) + ";",
           transpiled,
-          "  return typeof App !== 'undefined' ? App : typeof __appExport !== 'undefined' ? __appExport : null;",
+          // Component resolution, in priority order. We try the
+          // explicit signals first (a function literally named App,
+          // a default export rewritten to __appExport, a CommonJS
+          // exports.default / module.exports.App) before falling
+          // back to "find any capitalised function in scope" so a
+          // learner who wrote \`function Counter() { ... }\` without
+          // an export still sees their component on screen instead
+          // of the misleading "No component found" error.
+          "  if (typeof App !== 'undefined') return App;",
+          "  if (typeof __appExport !== 'undefined') return __appExport;",
+          "  if (module.exports && module.exports.default) return module.exports.default;",
+          "  if (module.exports && typeof module.exports === 'function') return module.exports;",
+          "  if (module.exports && module.exports.App) return module.exports.App;",
+          // Last resort — pick the first capitalised top-level
+          // function name that's in scope. This relies on
+          // Babel-transpiled function declarations being hoisted +
+          // visible via \`typeof <name> === 'function'\`. The list
+          // gets pulled from the user source via a Babel pass at
+          // build time and spliced in below as __candidateNames.
+          "  for (const name of __candidateNames) {",
+          "    try { if (eval('typeof ' + name) === 'function' && /^[A-Z]/.test(name)) return eval(name); } catch {}",
+          "  }",
+          "  return null;",
           "})();",
         ].join("\\n"),
       );
@@ -195,24 +346,44 @@ function buildPreviewHtml(userSource: string): string {
     try {
       const App = factory(React, ReactNative);
       if (!App) {
+        const namesHint = __candidateNames.length > 0
+          ? " Saw these capitalised names but none resolved to a function: " + __candidateNames.join(", ") + "."
+          : " Source had no capitalised top-level function or class declarations.";
         throw new Error(
-          "No component found. Declare \`function App() { ... }\` or \`export default function App()\`."
+          "No component found." + namesHint +
+          " Either rename your component to App, add 'export default', or do 'module.exports = MyComponent'."
         );
       }
+      // Mount via ReactDOM.createRoot directly. We previously used
+      // \`AppRegistry.runApplication\` which is the canonical RN-web
+      // entry, but AppRegistry's plumbing was sometimes leaving the
+      // root unmounted in our iframe (no error, just blank screen)
+      // depending on react-native-web's internal style-renderer
+      // initialization order. Going through createRoot is one fewer
+      // moving piece — react-native-web's components handle their own
+      // style injection at render time, so we still get correct RN
+      // semantics without relying on AppRegistry's mount path.
       AppRegistry.registerComponent("FishbonesApp", () => App);
-      AppRegistry.runApplication("FishbonesApp", {
-        rootTag: document.getElementById("root"),
-      });
+      const rootEl = document.getElementById("root");
+      const root = createRoot(rootEl);
+      root.render(React.createElement(App));
+      // First commit landed — clear the boot marker so the user
+      // sees the rendered UI instead of "booting…" floating over it.
+      const bootEl = document.getElementById("__fishbones_boot");
+      if (bootEl) bootEl.remove();
     } catch (err) {
       showPhaseError("render", err);
       console.error("[render]", err);
     }
 
     /// Render an error into a full-screen pre overlay. Combines name +
-    /// message + stack so WebKit's stack-only default (which looks like
-    /// "anonymous@\nmodule code@http://.../:84:26" without any message)
-    /// stops being a mystery. Dedupes: calling twice reuses the same
-    /// element so the second error doesn't hide the first.
+    /// message + stack so WebKit's stack-only default (which looks
+    /// like "anonymous@ ⏎ module code@http://.../:84:26" without any
+    /// message — escape sequence avoided here because the outer
+    /// template literal would interpret a literal backslash-n as a
+    /// real newline and break this comment) stops being a mystery.
+    /// Dedupes: calling twice reuses the same element so the second
+    /// error doesn't hide the first.
     function showError(err) {
       showPhaseError("", err);
     }
@@ -259,6 +430,16 @@ function buildPreviewHtml(userSource: string): string {
       }
       return out.join("\\n");
     }
+
+    })().catch((err) => {
+      // Last-resort backstop. \`showPhaseError\` lives inside the async
+      // function scope and isn't in scope here, so we reuse the
+      // CONSOLE_SHIM's \`__fishbonesShowError\` helper which is defined
+      // at module top-level. Either way the user gets a visible
+      // overlay instead of a silent rejection.
+      console.error("[boot]", err);
+      try { __fishbonesShowError(err); } catch (e) { /* shim missing */ }
+    });
   </script>
 </body>
 </html>`;

@@ -143,6 +143,29 @@
 .fishbones-editor-host {
   flex: 1;
   min-height: 0;
+  /* Pin Monaco's internal absolutely-positioned children (gutter,
+     line numbers, view zones, suggest widget) to THIS rect instead
+     of letting them re-anchor to a more distant ancestor. Without
+     `position: relative` the gutter occasionally renders outside
+     the host on the Tauri webview's release-build layout pass —
+     the symptom is line numbers floating to the left of the
+     editor's visible area. `overflow: hidden` clips anything that
+     still escapes so it can't bleed into adjacent panes. */
+  position: relative;
+  overflow: hidden;
+}
+
+/* Belt-and-suspenders: force Monaco's internals to use monospace
+   regardless of the page's font cascade. Monaco normally takes
+   `editor.options.fontFamily`, but a global font-family rule on a
+   parent sometimes wins on first paint before Monaco's inline
+   styles attach. Pinning here keeps the gutter + view content
+   monospace from frame zero. */
+.fishbones-editor-host .monaco-editor,
+.fishbones-editor-host .monaco-editor .view-line,
+.fishbones-editor-host .monaco-editor .line-numbers,
+.fishbones-editor-host .monaco-editor .margin-view-overlays {
+  font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
 }
 
 /* Paginated hint panel rendered between the toolbar and Monaco. Shows ONE
