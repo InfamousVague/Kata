@@ -1,0 +1,34 @@
+.m-app {
+  position: fixed;
+  inset: 0;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  display: flex;
+  flex-direction: column;
+  /* iOS safe areas — top for status bar / dynamic island, bottom is
+     handled by MobileTabBar's own safe-area-inset. */
+  padding-top: env(safe-area-inset-top, 0);
+  font-family: var(--font-sans);
+}
+
+.m-app__main {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* Reserve space for the floating pill nav. Pill is ~52px tall and
+     sits 12px above the home indicator — total inset ≈ 80px + safe
+     area. We add the safe-area inset explicitly here (the pill is
+     fixed-position + offsets from safe-area too, but content-flow
+     still needs its own reserve). */
+  padding-bottom: calc(env(safe-area-inset-bottom, 0) + 84px);
+  -webkit-overflow-scrolling: touch;
+}
+
+.m-app__boot {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--color-bg-primary);
+  z-index: 50;
+}

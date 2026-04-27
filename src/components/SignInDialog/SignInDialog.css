@@ -32,6 +32,33 @@
   gap: 14px;
 }
 
+/* Mobile: bottom-sheet treatment. Anchor the panel to the bottom of
+   the viewport, full width, slide up from below. Honors the iOS home-
+   indicator safe-area so the auth buttons aren't squeezed under the
+   gesture bar. Triggered by coarse-pointer + narrow viewport — same
+   heuristic as `isMobile` in lib/platform.ts. */
+@media (pointer: coarse) and (max-width: 768px) {
+  .fishbones-signin-backdrop {
+    place-items: end center;
+  }
+  .fishbones-signin-panel {
+    width: 100vw;
+    max-width: 100%;
+    max-height: 90vh;
+    border-radius: 18px 18px 0 0;
+    padding: 24px 20px calc(24px + env(safe-area-inset-bottom, 0));
+    border-left: 0;
+    border-right: 0;
+    border-bottom: 0;
+    animation: fishbones-signin-slideup 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+}
+
+@keyframes fishbones-signin-slideup {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
 .fishbones-signin-close {
   position: absolute;
   top: 10px;

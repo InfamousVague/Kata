@@ -38,12 +38,13 @@ import ProfileView from "./components/Profile/ProfileView";
 import PlaygroundView from "./components/Playground/PlaygroundView";
 import DocsView from "./components/Docs/DocsView";
 import { FISHBONES_DOCS } from "./docs/pages";
-import { isWeb } from "./lib/platform";
+import { isWeb, isMobile } from "./lib/platform";
 import GeneratePackDialog from "./components/ChallengePack/GeneratePackDialog";
 import { useIngestRun } from "./hooks/useIngestRun";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import QuizView from "./components/Quiz/QuizView";
 import AiAssistant from "./components/AiAssistant/AiAssistant";
+import MobileApp from "./mobile/MobileApp";
 import { InstallBanner } from "./components/InstallBanner/InstallBanner";
 import CommandPalette from "./components/CommandPalette/CommandPalette";
 import { runFiles, isPassing, type RunResult } from "./runtimes";
@@ -80,6 +81,14 @@ const NATIVE_TOOLCHAIN_LANGUAGES = new Set<string>([
 ]);
 
 export default function App() {
+  // Mobile short-circuit. Renders a totally separate component tree
+  // (no TopBar, no Sidebar, no editor) when running on a phone-sized
+  // device. We bail before instantiating the desktop hooks tree so we
+  // don't pay for any of the chrome the mobile UI doesn't use.
+  if (isMobile) {
+    return <MobileApp />;
+  }
+
   const {
     courses,
     loaded: coursesLoaded,

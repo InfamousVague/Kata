@@ -126,6 +126,24 @@ export function useProgress() {
     storage.clearCourseCompletions(courseId).catch(() => {});
   }
 
+  /// Wipe ALL local completions + history. Used by the mobile Settings
+  /// "Reset local progress" button. We iterate distinct course ids in
+  /// the current `completed` set and delegate to the per-course clear
+  /// API on the storage backend, then reset in-memory state.
+  /// Cloud-synced devices keep their own copies — this is local-only.
+  async function resetProgress() {
+    const courseIds = new Set<string>();
+    for (const k of completed) courseIds.add(k.split(":", 1)[0]);
+    for (const r of history) courseIds.add(r.course_id);
+    await Promise.all(
+      Array.from(courseIds).map((id) =>
+        storage.clearCourseCompletions(id).catch(() => {}),
+      ),
+    );
+    setCompleted(new Set());
+    setHistory([]);
+  }
+
   return {
     completed,
     history,
@@ -133,6 +151,7 @@ export function useProgress() {
     clearLessonCompletion,
     clearChapterCompletions,
     clearCourseCompletions,
+    resetProgress,
     loaded,
   };
 }

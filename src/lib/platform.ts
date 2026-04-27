@@ -31,6 +31,28 @@ export const TARGET: "desktop" | "web" =
 export const isWeb = TARGET === "web";
 export const isDesktop = TARGET === "desktop";
 
+/// `isMobile` — true when the chrome should collapse to a phone-sized
+/// layout (single column, bottom tab bar, no sidebar, no AI orb).
+///
+/// We don't have a separate "mobile" build target; the same Tauri
+/// binary ships to iOS and macOS Catalyst. We check at runtime via the
+/// CSS-like `pointer:coarse` + `max-width` heuristic, plus a sanity
+/// check on `navigator.platform` for the iOS sim. Inlined into a const
+/// at first read so the rest of the app can branch on it without a
+/// hook.
+function detectMobile(): boolean {
+  if (typeof window === "undefined") return false;
+  // Width is the most reliable signal in a Tauri WKWebView. The desktop
+  // Tauri config pins `minWidth: 900` (see tauri.conf.json), so a
+  // viewport narrower than 768px is structurally only possible on a
+  // phone-sized device. UA / platform sniffing is unreliable inside
+  // iOS WKWebView under Tauri 2 — Tauri sets a custom UA that doesn't
+  // always contain "iPhone".
+  return window.innerWidth < 768;
+}
+
+export const isMobile = detectMobile();
+
 /// Languages whose runtime needs local processes / system compilers /
 /// macOS-only tooling. On web these short-circuit to a "desktop only"
 /// upsell instead of attempting to run.

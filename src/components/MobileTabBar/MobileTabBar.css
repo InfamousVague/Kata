@@ -1,0 +1,71 @@
+/* Floating glass-morphism pill nav.
+   - Detached from the bottom edge by `safe-area-inset-bottom + 12px`
+     so it floats above the home indicator with breathing room.
+   - Centered horizontally, max-width caps so it stays a pill on wider
+     phone screens (Plus / Pro Max).
+   - Glass treatment: translucent dark fill + 18px backdrop blur +
+     hairline border, mirroring the academy site's `.nav--scrolled`. */
+
+.fishbones-mtab {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom, 0) + 12px);
+  width: min(calc(100vw - 32px), 380px);
+  display: flex;
+  justify-content: space-around;
+  align-items: stretch;
+  gap: 4px;
+  padding: 6px;
+  background: rgba(19, 19, 26, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  /* Soft shadow so the pill reads as detached from whatever's behind
+     it. iOS-style depth without being too heavy. */
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35),
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+  z-index: 100;
+}
+
+.fishbones-mtab__btn {
+  flex: 1;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px 6px 6px;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  color: var(--color-text-tertiary, #9b9ba7);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.12s ease, background 0.18s ease;
+}
+
+.fishbones-mtab__btn:active {
+  /* Touch feedback — no hover state on iOS, but :active is what fires
+     on tap. Slightly dim the icon to confirm the tap registered. */
+  opacity: 0.7;
+}
+
+.fishbones-mtab__btn--active {
+  color: var(--color-text-primary, #fafafa);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.fishbones-mtab__btn:disabled,
+.fishbones-mtab__btn[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.fishbones-mtab__btn span {
+  display: block;
+}

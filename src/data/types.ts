@@ -149,7 +149,12 @@ export interface Chapter {
   lessons: Lesson[];
 }
 
-export type Lesson = ReadingLesson | ExerciseLesson | MixedLesson | QuizLesson;
+export type Lesson =
+  | ReadingLesson
+  | ExerciseLesson
+  | MixedLesson
+  | QuizLesson
+  | PuzzleLesson;
 
 interface LessonBase {
   id: string;
@@ -313,6 +318,76 @@ export function isExerciseKind(lesson: Lesson): lesson is ExerciseLesson | Mixed
 
 export function isQuiz(lesson: Lesson): lesson is QuizLesson {
   return lesson.kind === "quiz";
+}
+
+export function isPuzzle(lesson: Lesson): lesson is PuzzleLesson {
+  return lesson.kind === "puzzle";
+}
+
+/**
+ * Block-arrangement puzzle. Mobile-first lesson kind: the learner re-orders
+ * a shuffled set of code blocks into the canonical sequence by tapping
+ * blocks in a pool to add them to a "stage" stack, then validates against
+ * `solutionOrder`. Designed so it works equally well on phone (large tap
+ * targets) and Apple Watch (one block fits per row, scrollable list).
+ *
+ * Generated automatically by `scripts/generate-puzzles.mjs` from existing
+ * `ExerciseLesson.solution` strings — every existing exercise grows a
+ * puzzle counterpart for free, no per-lesson authoring. The auto-derive
+ * script chooses granularity ("statement" for starter lessons, "line" for
+ * advanced) and pulls 2-3 distractors from sibling lessons in the same
+ * course.
+ *
+ * Validation is structural (compare the user's order against
+ * `solutionOrder`), not by execution — the puzzle's job is to test whether
+ * the learner understands the *shape* of the solution, not whether they
+ * can run it.
+ */
+export interface PuzzleLesson extends LessonBase {
+  kind: "puzzle";
+  language: LanguageId;
+  /**
+   * The shuffled pool of blocks the learner sees. Includes all correct
+   * blocks (in the canonical order BEFORE shuffling — UI shuffles at
+   * render time so the same lesson re-shuffles on retry) plus optional
+   * distractors. Each block carries its own id so we can track which
+   * one's been staged without index-into-array bookkeeping.
+   */
+  blocks: PuzzleBlock[];
+  /**
+   * The ordered list of block ids that, when staged in this exact order,
+   * forms the canonical solution. Reading these out of `blocks` and
+   * concatenating their `code` fields yields the original solution
+   * (modulo whitespace normalization). Length equals the number of
+   * non-distractor blocks.
+   */
+  solutionOrder: string[];
+  /**
+   * Source granularity — informational, lets the UI hint at chunk size
+   * ("Arrange these 8 statements" vs "Arrange these 12 lines"). The
+   * actual block sizes are encoded in `blocks[].code`; this is metadata.
+   */
+  granularity: "line" | "statement" | "function";
+  /**
+   * Optional inline narration the reader sees above the puzzle stage.
+   * Usually a one-line "Arrange the lines that ..." hint. Falls back to
+   * a generic prompt when missing.
+   */
+  prompt?: string;
+}
+
+export interface PuzzleBlock {
+  /// Stable identifier. Generated at puzzle-build time so retries on the
+  /// same puzzle don't regenerate ids (which would let learners cheat by
+  /// memorising "the third id is correct").
+  id: string;
+  /// The code fragment shown on the block. Pre-formatted; the UI renders
+  /// it verbatim with monospace + Shiki highlighting.
+  code: string;
+  /// True for distractor blocks that are NOT part of the solution. Distractors
+  /// are still pickable from the pool but staging them counts as a wrong
+  /// answer. Defaults to false; a missing flag = correct block.
+  distractor?: boolean;
 }
 
 /// Challenge packs and courses share the same shape — this is the single

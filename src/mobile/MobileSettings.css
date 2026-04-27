@@ -1,0 +1,120 @@
+.m-set {
+  padding: 18px 16px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.m-set__head {
+  margin-bottom: -2px;
+}
+
+.m-set__title {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0;
+  color: var(--color-text-primary);
+}
+
+.m-set__section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.m-set__section-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  margin: 0 0 4px;
+}
+
+.m-set__blurb {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.m-set__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-default);
+  border-radius: 12px;
+  text-decoration: none;
+  color: var(--color-text-primary);
+}
+
+.m-set__row--passive {
+  /* Read-only row — no tap feedback. */
+}
+
+.m-set__row--button {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.m-set__row--button:active {
+  background: var(--color-bg-elevated);
+}
+
+.m-set__row--button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.m-set__row--primary {
+  background: var(--color-text-primary);
+  color: var(--color-bg-primary);
+  border-color: var(--color-text-primary);
+}
+
+.m-set__row--primary:active {
+  background: var(--color-text-primary);
+  opacity: 0.85;
+}
+
+.m-set__row--danger {
+  border-color: var(--color-error, #ef4444);
+  color: var(--color-error, #fca5a5);
+}
+
+.m-set__row--link {
+  justify-content: space-between;
+}
+
+.m-set__row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.m-set__row-title {
+  font-size: 14.5px;
+  font-weight: 600;
+}
+
+.m-set__row-meta {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.m-set__row-chevron {
+  color: var(--color-text-tertiary);
+  font-size: 14px;
+}

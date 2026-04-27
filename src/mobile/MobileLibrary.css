@@ -1,0 +1,216 @@
+.m-lib {
+  padding: 18px 16px 8px;
+}
+
+.m-lib__head {
+  margin-bottom: 14px;
+}
+
+.m-lib__title {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0 0 2px;
+  color: var(--color-text-primary);
+}
+
+.m-lib__subtitle {
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+  margin: 0;
+}
+
+/* Filter pills — single horizontal-scroll row, scrollbar hidden. The
+   pills sit under the title, above the grid. */
+.m-lib__filter {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  gap: 8px;
+  padding: 4px 0 14px;
+  /* Chop the scrollbar so the row reads as a pill cluster, not a
+     scroll affordance. */
+  scrollbar-width: none;
+}
+
+.m-lib__filter::-webkit-scrollbar {
+  display: none;
+}
+
+.m-lib__pill {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-default);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  white-space: nowrap;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.m-lib__pill:active {
+  background: var(--color-bg-elevated);
+}
+
+.m-lib__pill--active {
+  background: var(--color-text-primary);
+  color: var(--color-bg-primary);
+  border-color: var(--color-text-primary);
+}
+
+.m-lib__pill-count {
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.7;
+  font-feature-settings: "tnum";
+}
+
+.m-lib__pill--active .m-lib__pill-count {
+  opacity: 0.85;
+}
+
+/* Grid of book covers — 2:3 portrait cards in a 2-col grid. The cover
+   image is an absolute background; the title + meta sit BELOW the
+   cover, not on top of it (better for legibility on small art). */
+.m-lib__grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+@media (max-width: 320px) {
+  .m-lib__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.m-lib__cell {
+  display: block;
+}
+
+.m-lib__tile {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--color-text-primary);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.08s ease;
+}
+
+.m-lib__tile:active {
+  transform: scale(0.98);
+}
+
+.m-lib__cover {
+  display: block;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  background-color: var(--color-bg-secondary);
+  background-size: cover;
+  background-position: center;
+  border-radius: 8px;
+  border: 1px solid var(--color-border-default);
+  overflow: hidden;
+  /* Subtle inset shadow gives the cover that printed-page feel. */
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.04),
+    0 1px 2px rgba(0, 0, 0, 0.18);
+}
+
+/* Fallback cover when no artwork — large initial centred on a tinted
+   background, language-keyed via a tiny palette. */
+.m-lib__cover--fallback {
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: 56px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: rgba(255, 255, 255, 0.85);
+  background-color: #2a2a30;
+}
+
+.m-lib__cover--fallback[data-lang="javascript"],
+.m-lib__cover--fallback[data-lang="typescript"] {
+  background: linear-gradient(135deg, #1c1a3a 0%, #0d0d1d 100%);
+}
+
+.m-lib__cover--fallback[data-lang="python"] {
+  background: linear-gradient(135deg, #1a3a2c 0%, #0d1d12 100%);
+}
+
+.m-lib__cover--fallback[data-lang="rust"] {
+  background: linear-gradient(135deg, #3a1a14 0%, #1d0a0a 100%);
+}
+
+.m-lib__cover--fallback[data-lang="go"] {
+  background: linear-gradient(135deg, #14323a 0%, #0a151d 100%);
+}
+
+.m-lib__cover--fallback[data-lang="solidity"],
+.m-lib__cover--fallback[data-lang="vyper"] {
+  background: linear-gradient(135deg, #2c1a3a 0%, #150a1d 100%);
+}
+
+.m-lib__tile-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 2px;
+}
+
+.m-lib__tile-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 2.5em;
+}
+
+.m-lib__tile-meta {
+  font-size: 11.5px;
+  color: var(--color-text-tertiary);
+  font-feature-settings: "tnum";
+}
+
+.m-lib__tile-bar {
+  display: block;
+  height: 2.5px;
+  background: var(--color-bg-inset, rgba(255, 255, 255, 0.08));
+  border-radius: 2px;
+  overflow: hidden;
+  margin: 0 2px;
+  position: relative;
+}
+
+.m-lib__tile-bar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--m-lib-pct, 0%);
+  background: var(--color-text-primary);
+  transition: width 0.3s ease;
+}

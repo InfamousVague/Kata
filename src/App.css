@@ -44,6 +44,15 @@ button {
   margin-left: 10px;
 }
 
+/* Mobile body: drop the desktop margin-left and reserve space at the
+   top for the iOS status bar / dynamic island, plus bottom padding so
+   the MobileTabBar (~70px) doesn't occlude scrollable content. */
+.fishbones__body--mobile .fishbones__main {
+  margin-left: 0;
+  padding-top: env(safe-area-inset-top, 0);
+  padding-bottom: calc(env(safe-area-inset-bottom, 0) + 70px);
+}
+
 /* Collapsed-sidebar mode: sidebar drops out of flow so the main pane
    reclaims the full width. Toggle via Cmd/Ctrl+\ or the top-bar
    button; state persists in localStorage. */
