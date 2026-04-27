@@ -8,11 +8,32 @@
 /// at the bottom, slide-up animation, tap-backdrop-to-dismiss.
 
 import { useEffect, useRef } from "react";
-import type { Course } from "../data/types";
+import type { Course, Lesson } from "../data/types";
 import { Icon } from "@base/primitives/icon";
-import { circleCheck } from "@base/primitives/icon/icons/circle-check";
+import { bookOpen } from "@base/primitives/icon/icons/book-open";
+import { code as codeIcon } from "@base/primitives/icon/icons/code";
+import { helpCircle } from "@base/primitives/icon/icons/help-circle";
 import { x as xIcon } from "@base/primitives/icon/icons/x";
 import "./MobileOutline.css";
+
+/// Pick the per-kind glyph that lives inside the lesson bullet. Mirrors
+/// the desktop Sidebar `iconForKind` so done-state mobile rows show the
+/// same icon-in-a-circle the sidebar shows. Mobile has a `puzzle` kind
+/// the desktop helper doesn't enumerate — we route it through the code
+/// icon since puzzles are arrange-the-blocks variants of an exercise.
+function iconForKind(kind: Lesson["kind"]) {
+  switch (kind) {
+    case "reading":
+      return bookOpen;
+    case "quiz":
+      return helpCircle;
+    case "exercise":
+    case "mixed":
+    case "puzzle":
+    default:
+      return codeIcon;
+  }
+}
 
 interface Props {
   course: Course;
@@ -112,10 +133,20 @@ export default function MobileOutline({
                         }}
                       >
                         <span
-                          className={`m-outline__bullet${isDone ? " m-outline__bullet--done" : ""}`}
+                          className={`m-outline__bullet${
+                            isDone
+                              ? " m-outline__bullet--done"
+                              : isActive
+                                ? " m-outline__bullet--active"
+                                : ""
+                          }`}
                           aria-hidden
                         >
-                          {isDone ? <Icon icon={circleCheck} size="sm" /> : null}
+                          <Icon
+                            icon={iconForKind(l.kind)}
+                            size="xs"
+                            color="currentColor"
+                          />
                         </span>
                         <span className="m-outline__row-text">
                           <span className="m-outline__row-title">{l.title}</span>

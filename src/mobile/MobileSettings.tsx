@@ -25,7 +25,7 @@ export default function MobileSettings({
   cloud,
   onRequestSignIn,
   onResetProgress,
-  appVersion = "0.1.3",
+  appVersion = "0.1.4",
 }: Props) {
   const [confirmReset, setConfirmReset] = useState(false);
   const [resetting, setResetting] = useState(false);

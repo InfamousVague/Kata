@@ -180,21 +180,40 @@
   border-radius: 2px;
 }
 
+/* Mirrors the desktop Sidebar `.fishbones__lesson-status` pattern: a
+   small circle that always carries the lesson-kind glyph (book / code /
+   help) so completed rows still advertise what they were. The state
+   flips background + icon color rather than swapping icons — same cue
+   the desktop sidebar uses, so the two surfaces feel like the same
+   product. */
 .m-outline__bullet {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
-  display: grid;
-  place-items: center;
-  border: 1.5px solid var(--color-border-strong, rgba(255, 255, 255, 0.18));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--color-border-default, rgba(255, 255, 255, 0.12));
   border-radius: 50%;
-  color: var(--color-success, #22c55e);
+  color: var(--color-text-disabled, rgba(255, 255, 255, 0.22));
   background: transparent;
 }
 
+/* Active: brighter ring + visible icon, no halo (mobile has the left
+   bar on the row to mark "you are here" — a halo on top of that would
+   double-flag). */
+.m-outline__bullet--active {
+  border-color: var(--color-text-secondary);
+  color: var(--color-text-secondary);
+}
+
+/* Done: inverted — white-filled circle with the kind glyph in black.
+   Matches `.fishbones__lesson-status--done` exactly so the completion
+   marker reads identically on phone and desktop. */
 .m-outline__bullet--done {
-  border-color: var(--color-success, #22c55e);
-  background: transparent;
+  background: var(--color-text-primary);
+  border-color: var(--color-text-primary);
+  color: var(--color-bg-primary);
 }
 
 .m-outline__row-text {

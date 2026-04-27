@@ -39,9 +39,9 @@ _Visual identity for AI-generated book covers. Generated via Lovart using Nanoba
 | -------------------------------------- | ------------- | --------- |
 | `javascript`, `java`                   | Mustard       | `#D9A74A` |
 | `typescript`, `csharp`, `threejs`      | Federal blue  | `#3B5A8C` |
-| `python`, `go`, `reactnative`          | Seafoam       | `#3F8A7C` |
+| `python`, `go`, `reactnative`, `vyper` | Seafoam       | `#3F8A7C` |
 | `rust`, `swift`, `web`                 | Oxblood       | `#9C3B3A` |
-| `c`, `cpp`, `kotlin`                   | Aubergine     | `#6B4F7A` |
+| `c`, `cpp`, `kotlin`, `solidity`       | Aubergine     | `#6B4F7A` |
 | `assembly`                             | Monochrome ink (no spot) | `#2B2420` |
 
 ## 4. Prompt template
@@ -70,3 +70,6 @@ Paste into Lovart; substitute `{title}`, `{language}`, `{topic}`, `{spot_hex}`, 
 
 **Assembly Language Step-by-Step** — `assembly` / monochrome / topic: _registers & the instruction cycle_
 > Central specimen: skeletal cross-section of a mechanical calculator's carriage — teeth, pins, and escapements — rendered in single-ink charcoal on cream paper, no spot color, all structure no flesh.
+
+**Vyper Fundamentals** — `vyper` / seafoam `#3F8A7C` / topic: _audit-readable smart contracts on Ethereum_
+> Central specimen: an articulated snake skeleton coiled into a chain — each vertebra a hexagonal cell, the spine forming a blockchain of bones — pinned to the cream paper as a 19th-century natural-history plate. Hexagonal hatching at the joints suggests honeycomb lattice; the skull is closed-mouthed, contemplative, audit-deliberate. No fangs visible, no aggression — Vyper is the safer-than-Solidity sibling, so the specimen reads as scholarly rather than venomous.

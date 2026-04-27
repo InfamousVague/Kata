@@ -297,6 +297,7 @@ const PACK_IDS = [
   "solana-programs",
   "viem-ethers",
   "cryptography-fundamentals",
+  "vyper-fundamentals",
 
   // Challenge packs — one per browser-runnable language
   "challenges-javascript-handwritten",
