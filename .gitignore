@@ -7,6 +7,14 @@ dist/
 dist-web/
 src-tauri/target/
 src-tauri/gen/
+# ...except the iOS Info.plist, which we hand-edit to register the
+# `fishbones://` URL scheme for OAuth callbacks (see
+# `CFBundleURLTypes` block in the file). `tauri ios init` would
+# clobber this edit, but routine `tauri ios build` runs leave it
+# alone — so we track the file. After any future `tauri ios init`,
+# re-apply the URL-scheme block before building or sign-in
+# callbacks dead-end in Safari.
+!src-tauri/gen/apple/fishbones_iOS/Info.plist
 # Build cache for the vendor + node-fetch scripts. Both populate from
 # package metadata at build time; nothing here is hand-authored.
 src-tauri/.cache/
