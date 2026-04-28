@@ -1,68 +1,95 @@
+/* Wordbank-style micro-puzzle. The card content scrolls, the bank
+   stays pinned to the bottom — the screen reads as "code on top,
+   tile rack on the bottom" the way a Codecademy / typing-tutor
+   layout does. The lesson dispatch's bottom Prev/Next nav already
+   provides escape; this component owns the inside of the lesson area
+   and nothing else. */
+
 .m-mp {
+  /* Fill the lesson scroll area top-to-bottom. The flex column lets
+     `.m-mp__card` (flex: 1) eat the remaining height while the
+     prompt + progress bar pin to the top. */
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 0 16px;
+  min-height: 0;
+  /* Bleed to the screen edges so the bank can hug the bottom safe
+     area cleanly. The lesson dispatch wraps us in `.m-lesson` which
+     handles outer padding for non-puzzle kinds — for puzzles we
+     opt out of that and manage padding ourselves here. */
+  padding: 0 0 calc(env(safe-area-inset-bottom, 0));
+  margin: 0 -16px;
+  flex: 1;
 }
 
 .m-mp__prompt {
   font-size: 14.5px;
-  line-height: 1.4;
+  line-height: 1.45;
   color: var(--color-text-secondary);
-  margin: 0 0 4px;
-}
-
-.m-mp__cards {
-  list-style: none;
   margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+  padding: 0 16px 8px;
 }
 
-.m-mp__card-wrap {
-  display: block;
+.m-mp__empty {
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+  padding: 16px;
+  text-align: center;
 }
 
-/* Each card is a self-contained code-row with its own border + chrome.
-   Solved state dims the border to "completed" green so the user can
-   see at a glance which drills are finished. */
-.m-mp__card {
-  background: var(--color-bg-elevated, #19191d);
-  border: 1px solid var(--color-border-default, rgba(255, 255, 255, 0.08));
-  border-radius: 14px;
-  padding: 12px 14px;
+/* --- DECK PROGRESS (one slim bar above the card) -------------------- */
+
+.m-mp__deck-progress {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 10px;
-  /* Per-card mount: subtle fade-rise so a stack of 8-10 cards
-     composes nicely instead of paint-dumping. */
-  opacity: 0;
-  transform: translateY(4px);
-  animation: m-mp-card-rise 0.32s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-  transition: border-color 0.2s ease, background 0.2s ease;
+  padding: 0 16px 12px;
 }
 
-@keyframes m-mp-card-rise {
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.m-mp__deck-step {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  font-feature-settings: "tnum";
+  flex-shrink: 0;
 }
 
-.m-mp__card-wrap:nth-child(1) .m-mp__card { animation-delay: 0ms; }
-.m-mp__card-wrap:nth-child(2) .m-mp__card { animation-delay: 30ms; }
-.m-mp__card-wrap:nth-child(3) .m-mp__card { animation-delay: 60ms; }
-.m-mp__card-wrap:nth-child(4) .m-mp__card { animation-delay: 90ms; }
-.m-mp__card-wrap:nth-child(5) .m-mp__card { animation-delay: 120ms; }
-.m-mp__card-wrap:nth-child(6) .m-mp__card { animation-delay: 150ms; }
-.m-mp__card-wrap:nth-child(7) .m-mp__card { animation-delay: 180ms; }
-.m-mp__card-wrap:nth-child(n+8) .m-mp__card { animation-delay: 210ms; }
+.m-mp__deck-bar {
+  flex: 1;
+  height: 4px;
+  background: var(--color-bg-secondary);
+  border-radius: 3px;
+  overflow: hidden;
+}
 
-.m-mp__card--solved {
-  border-color: rgba(124, 217, 124, 0.35);
-  background: rgba(124, 217, 124, 0.04);
+.m-mp__deck-bar-fill {
+  height: 100%;
+  background: var(--color-text-primary);
+  border-radius: 3px;
+  transition: width 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* --- CARD ------------------------------------------------------------ */
+
+.m-mp__card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* The scrollable content portion — code + hint + explanation. The
+   bank below stays pinned. */
+.m-mp__card-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .m-mp__card-head {
@@ -70,43 +97,49 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  font-size: 11.5px;
-  color: var(--color-text-tertiary);
 }
 
 .m-mp__card-step {
+  font-size: 11.5px;
   font-weight: 700;
   letter-spacing: 0.04em;
-  font-feature-settings: "tnum";
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
 }
 
 .m-mp__card-hint {
-  font-style: italic;
+  font-size: 13px;
+  color: var(--color-text-secondary);
   text-align: right;
+  line-height: 1.35;
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-/* The line container holds the Shiki-rendered HTML. We drop the
-   `pre` margin Shiki emits by default and tighten the padding so
-   the code reads as part of the card, not a nested code block. */
+/* --- CODE BLOCK ------------------------------------------------------ */
+/* Multi-line aware. `white-space: pre-wrap` lets long lines wrap on
+   narrow phones, and the slot spans participate in the wrap because
+   they're inline-block (matching the surrounding code's font-size +
+   line-height). */
+
 .m-mp__line {
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: 14.5px;
-  line-height: 1.6;
+  line-height: 1.7;
   background: var(--color-bg-secondary, #15151a);
-  border-radius: 8px;
-  padding: 10px 12px;
-  /* Long lines scroll horizontally so the chip doesn't get clipped
-     by the card edge. */
+  border: 1px solid var(--color-border-default, rgba(255, 255, 255, 0.08));
+  border-radius: 10px;
+  padding: 14px 14px;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  transition: border-color 0.2s ease, background 0.2s ease;
 }
 
-/* Shiki injects its own `<pre><code>` chrome — flatten it to inline. */
+.m-mp__line--solved {
+  border-color: rgba(124, 217, 124, 0.35);
+  background: rgba(124, 217, 124, 0.04);
+}
+
 .m-mp__line pre,
 .m-mp__line .shiki {
   background: transparent !important;
@@ -123,7 +156,6 @@
   white-space: pre;
 }
 
-/* Plain-line fallback while Shiki resolves on the first render. */
 .m-mp__line-raw {
   margin: 0;
   font: inherit;
@@ -135,167 +167,191 @@
   white-space: pre;
 }
 
-/* Inline tappable chip. Sized so chip height matches a token line so
-   the highlighting around it doesn't shift vertically when chips
-   render. The chip's content is set imperatively in the renderer,
-   so the styles here cover the full state machine. */
-.m-mp__chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+/* --- SLOTS (empty boxes inline in the code) ------------------------- */
+/* The slot is rendered into the Shiki output as a `<span>`. We size
+   it like an empty input rectangle when no tile is dropped — bigger
+   than a chip, so the "fill me" affordance reads even on a busy
+   line. Filled slots collapse to chip-style. */
+
+.m-mp__slot {
+  display: inline-block;
+  vertical-align: baseline;
   font: inherit;
   font-family: inherit;
-  font-weight: 600;
-  padding: 0 8px;
-  margin: 0 1px;
-  background: var(--color-bg-elevated, #19191d);
-  border: 1.5px dashed var(--color-border-strong, rgba(255, 255, 255, 0.2));
-  border-radius: 6px;
-  color: var(--color-text-tertiary);
-  cursor: pointer;
+  border-radius: 5px;
   -webkit-tap-highlight-color: transparent;
-  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
-  min-height: 22px;
-  vertical-align: baseline;
-}
-
-.m-mp__chip--empty {
-  font-style: italic;
-  font-weight: 500;
-}
-
-.m-mp__chip:active {
-  background: var(--color-bg-secondary);
-}
-
-.m-mp__chip--correct {
+  cursor: pointer;
+  /* Default — filled with content. Class modifiers below override. */
+  padding: 0 6px;
+  min-width: 32px;
+  text-align: center;
   background: var(--color-text-primary);
-  border: 1.5px solid var(--color-text-primary);
-  border-style: solid;
   color: var(--color-bg-primary);
+  border: 1.5px solid var(--color-text-primary);
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
-.m-mp__chip--wrong {
-  background: rgba(220, 80, 60, 0.14);
-  border-color: rgba(220, 80, 60, 0.55);
-  border-style: solid;
-  color: rgba(255, 200, 190, 0.95);
+/* Empty slot: hollow rectangle with a soft accent border. The
+   `\u00A0\u00A0\u00A0` non-breaking spaces in textContent hold the
+   chip width when empty so the line layout doesn't bounce as the
+   user fills slots. */
+.m-mp__slot--empty {
+  background: transparent;
+  border: 1.5px solid rgba(124, 158, 240, 0.55);
+  color: rgba(124, 158, 240, 0.0); /* invisible content; just sizing */
+  /* Slightly elevated min-width so empty slots are easy to spot
+     even when the surrounding token is one or two chars. */
+  min-width: 56px;
+  cursor: default;
 }
+
+.m-mp__slot--correct {
+  background: var(--color-text-primary);
+  color: var(--color-bg-primary);
+  border-color: var(--color-text-primary);
+}
+
+.m-mp__slot--wrong {
+  background: rgba(220, 80, 60, 0.14);
+  color: rgba(255, 200, 190, 0.95);
+  border-color: rgba(220, 80, 60, 0.55);
+}
+
+/* --- EXPLANATION ----------------------------------------------------- */
 
 .m-mp__explanation {
-  font-size: 12.5px;
-  line-height: 1.45;
-  color: var(--color-text-secondary);
   margin: 0;
-  padding: 8px 12px;
-  background: rgba(124, 217, 124, 0.06);
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--color-text-primary);
+  background: rgba(124, 217, 124, 0.08);
   border-left: 2px solid rgba(124, 217, 124, 0.45);
   border-radius: 4px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .m-mp__card {
-    opacity: 1;
-    transform: none;
-    animation: none;
-  }
-}
-
-/* ──────────── option sheet ──────────── */
-
-.m-mp-sheet-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 210;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
   display: flex;
-  align-items: flex-end;
-  animation: m-mp-fade 0.16s ease-out;
+  align-items: flex-start;
+  gap: 8px;
 }
 
-@keyframes m-mp-fade {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+.m-mp__explanation svg {
+  flex-shrink: 0;
+  color: rgba(124, 217, 124, 0.85);
+  margin-top: 2px;
 }
 
-.m-mp-sheet {
-  width: 100%;
-  max-height: 60vh;
-  display: flex;
-  flex-direction: column;
+/* --- WORDBANK (sticky bottom panel) --------------------------------- */
+/* The bank is the second half of the puzzle UI. It uses its own
+   horizontal padding so the tile grid hugs the screen edges with
+   only a touch of breathing room — feels like a real keyboard
+   tray, which is what we want. */
+
+.m-mp__bank {
+  flex-shrink: 0;
   background: var(--color-bg-elevated, #19191d);
   border-top: 1px solid var(--color-border-default, rgba(255, 255, 255, 0.08));
-  border-radius: 18px 18px 0 0;
-  padding: 8px 0 calc(env(safe-area-inset-bottom, 0) + 12px);
-  animation: m-mp-slideup 0.22s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-@keyframes m-mp-slideup {
-  from { transform: translateY(100%); }
-  to   { transform: translateY(0); }
-}
-
-.m-mp-sheet__grip {
-  width: 36px;
-  height: 4px;
-  margin: 6px auto 8px;
-  background: var(--color-border-strong, rgba(255, 255, 255, 0.18));
-  border-radius: 2px;
-}
-
-.m-mp-sheet__head {
-  font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--color-text-tertiary);
-  padding: 6px 18px 10px;
-}
-
-.m-mp-sheet__list {
-  list-style: none;
-  margin: 0;
-  padding: 4px 12px 6px;
+  padding: 10px 12px calc(env(safe-area-inset-bottom, 0) + 10px);
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
+  gap: 8px;
 }
 
-.m-mp-sheet__opt {
-  width: 100%;
+.m-mp__bank-tools {
   display: flex;
   align-items: center;
-  padding: 14px 14px;
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border-default);
-  border-radius: 10px;
-  text-align: left;
-  cursor: pointer;
-  font: inherit;
-  color: var(--color-text-primary);
-  -webkit-tap-highlight-color: transparent;
-  transition: background 0.12s ease, border-color 0.12s ease;
+  gap: 6px;
+  padding: 0 4px;
 }
 
-.m-mp-sheet__opt code {
+.m-mp__bank-tools-spacer {
+  flex: 1;
+}
+
+.m-mp__bank-counter {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  font-feature-settings: "tnum";
+}
+
+.m-mp__bank-btn {
+  width: 36px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  background: var(--color-bg-secondary, #15151a);
+  border: 1px solid var(--color-border-default, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font: inherit;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.m-mp__bank-btn:active:not(:disabled) {
+  background: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+}
+
+.m-mp__bank-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.m-mp__bank-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 4px;
+}
+
+.m-mp__tile {
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: 14px;
   font-weight: 600;
+  padding: 10px 14px;
+  background: var(--color-bg-secondary, #15151a);
+  border: 1px solid var(--color-border-default, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.12s ease, transform 0.08s ease, opacity 0.12s ease,
+    border-color 0.12s ease;
+  min-width: 44px;
+  text-align: center;
+  /* Large hit target on small screens. The 8px border-radius keeps
+     the tiles reading as soft rectangles rather than full pills,
+     which made the bank look like a keyboard. */
+  flex: 0 1 auto;
+}
+
+.m-mp__tile code {
+  font: inherit;
   background: transparent;
   padding: 0;
   color: inherit;
   white-space: pre;
 }
 
-.m-mp-sheet__opt:active {
+.m-mp__tile:active:not(:disabled) {
   background: var(--color-bg-elevated);
+  transform: translateY(1px);
 }
 
-.m-mp-sheet__opt--active {
-  border-color: var(--color-text-primary);
-  background: var(--color-bg-elevated);
+.m-mp__tile--used,
+.m-mp__tile:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .m-mp__deck-bar-fill,
+  .m-mp__line,
+  .m-mp__slot,
+  .m-mp__tile {
+    transition: none;
+  }
 }

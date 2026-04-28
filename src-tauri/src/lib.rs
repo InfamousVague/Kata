@@ -248,3 +248,6 @@ pub fn run() {
 // 147 drills + 792 cards 1777343961
 // SEED_VERSION refresh path 1777350092
 // practice tab + 2060 cards 1777355284
+// practice hub/deck 1777357199
+// profile gauges + heatmap 1777388151
+// profile gauges 1777388223

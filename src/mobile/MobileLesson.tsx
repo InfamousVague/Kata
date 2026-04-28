@@ -179,6 +179,10 @@ export default function MobileLesson({
             language={lesson.language}
             prompt={lesson.prompt}
             isCompleted={isCompleted}
+            // Auto-mark + advance when the learner solves the last
+            // card — feels like a quiz finishing on a correct
+            // answer rather than requiring an extra Next tap.
+            onComplete={onComplete}
           />
         )}
         {isExerciseKind(lesson) && (

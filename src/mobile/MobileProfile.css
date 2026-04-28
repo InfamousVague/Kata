@@ -49,6 +49,106 @@
   color: var(--color-text-primary);
 }
 
+/* --- TWIN RINGS (streak + level) --------------------------------- */
+/* The two rings sit side by side at the top of the profile so the
+   most-asked-about numbers (streak / level) become the visual focal
+   point. Each ring is a self-contained SVG + body block; the body
+   is absolutely positioned so the icon + value sit centered inside
+   the ring path. */
+
+.m-prof__rings {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.m-prof__ring {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  display: grid;
+  place-items: center;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-default);
+  border-radius: 16px;
+  padding: 14px;
+  /* `--ring-tone` is set by the tone variants below. The track is a
+     fade of the tone; the fill is full-saturation. */
+  --ring-tone: var(--color-text-primary);
+  --ring-tone-soft: rgba(255, 255, 255, 0.08);
+}
+
+.m-prof__ring--streak {
+  --ring-tone: #f59e3b;
+  --ring-tone-soft: rgba(245, 158, 59, 0.16);
+}
+
+.m-prof__ring--level {
+  --ring-tone: #7cd97c;
+  --ring-tone-soft: rgba(124, 217, 124, 0.16);
+}
+
+.m-prof__ring-svg {
+  position: absolute;
+  inset: 12px;
+  width: calc(100% - 24px);
+  height: calc(100% - 24px);
+}
+
+.m-prof__ring-track {
+  stroke: var(--ring-tone-soft);
+  stroke-width: 6;
+}
+
+.m-prof__ring-fill {
+  stroke: var(--ring-tone);
+  stroke-width: 6;
+  transition: stroke-dashoffset 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.m-prof__ring-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  text-align: center;
+  z-index: 1;
+}
+
+.m-prof__ring-icon {
+  color: var(--ring-tone);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.m-prof__ring-value {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--color-text-primary);
+  line-height: 1;
+  margin-top: 2px;
+}
+
+.m-prof__ring-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  margin-top: 2px;
+}
+
+.m-prof__ring-sub {
+  font-size: 11.5px;
+  color: var(--color-text-secondary);
+  font-feature-settings: "tnum";
+}
+
+/* --- STAT TILES --------------------------------------------------- */
+
 .m-prof__stats {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -93,12 +193,51 @@
 
 .m-prof__stat {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 14px 16px;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border-default);
   border-radius: 12px;
+  /* Toned accent strip on the left edge — gives each tile its own
+     identity without a busy color background. */
+  position: relative;
+  --stat-tone: var(--color-text-primary);
+  overflow: hidden;
+}
+
+.m-prof__stat::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--stat-tone);
+  opacity: 0.85;
+}
+
+.m-prof__stat--streak  { --stat-tone: #f59e3b; }
+.m-prof__stat--lessons { --stat-tone: #7cd9d3; }
+.m-prof__stat--xp      { --stat-tone: #fcd34d; }
+.m-prof__stat--level   { --stat-tone: #7cd97c; }
+
+.m-prof__stat-icon {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--stat-tone) 22%, transparent);
+  color: var(--stat-tone);
+  flex-shrink: 0;
+}
+
+.m-prof__stat-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
 }
 
 .m-prof__stat-value {
@@ -299,4 +438,206 @@
   font-size: 13px;
   color: var(--color-text-tertiary);
   margin: 0;
+}
+
+/* --- HEATMAP ------------------------------------------------------ */
+/* 7-row × 12-col grid. Flex-column-wrap with a fixed height = 7 cells
+   tall. CSS does the column packing automatically. */
+
+.m-prof__heatmap {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  height: calc(7 * 14px + 6 * 3px);
+  gap: 3px;
+  padding: 4px 0;
+}
+
+.m-prof__heatmap-cell {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  background: var(--color-bg-inset, rgba(255, 255, 255, 0.04));
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+.m-prof__heatmap-cell--lvl-0 {
+  background: rgba(255, 255, 255, 0.04);
+}
+.m-prof__heatmap-cell--lvl-1 {
+  background: rgba(124, 217, 124, 0.22);
+  border-color: rgba(124, 217, 124, 0.18);
+}
+.m-prof__heatmap-cell--lvl-2 {
+  background: rgba(124, 217, 124, 0.42);
+  border-color: rgba(124, 217, 124, 0.32);
+}
+.m-prof__heatmap-cell--lvl-3 {
+  background: rgba(124, 217, 124, 0.65);
+  border-color: rgba(124, 217, 124, 0.55);
+}
+.m-prof__heatmap-cell--lvl-4 {
+  background: #7cd97c;
+  border-color: rgba(124, 217, 124, 0.85);
+}
+
+.m-prof__heatmap-legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+
+.m-prof__heatmap-legend .m-prof__heatmap-cell {
+  width: 11px;
+  height: 11px;
+}
+
+/* --- LANGUAGE XP CHART ------------------------------------------- */
+/* Horizontal bars, language-tinted via `data-lang`. Bar width is
+   set inline from React; the fill color comes from CSS so we don't
+   ship a color table on the JS side. */
+
+.m-prof__lang-chart {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.m-prof__lang-row {
+  display: grid;
+  grid-template-columns: 92px 1fr 44px;
+  align-items: center;
+  gap: 8px;
+}
+
+.m-prof__lang-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.m-prof__lang-bar {
+  height: 8px;
+  background: var(--color-bg-inset, rgba(255, 255, 255, 0.06));
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.m-prof__lang-bar-fill {
+  height: 100%;
+  background: var(--color-text-primary);
+  border-radius: 4px;
+  transition: width 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.m-prof__lang-bar[data-lang="javascript"] .m-prof__lang-bar-fill { background: #f7df1e; }
+.m-prof__lang-bar[data-lang="typescript"] .m-prof__lang-bar-fill { background: #3178c6; }
+.m-prof__lang-bar[data-lang="python"]     .m-prof__lang-bar-fill { background: #3776ab; }
+.m-prof__lang-bar[data-lang="rust"]       .m-prof__lang-bar-fill { background: #ce412b; }
+.m-prof__lang-bar[data-lang="go"]         .m-prof__lang-bar-fill { background: #00add8; }
+.m-prof__lang-bar[data-lang="swift"]      .m-prof__lang-bar-fill { background: #fa7343; }
+.m-prof__lang-bar[data-lang="reactnative"]   .m-prof__lang-bar-fill { background: #61dafb; }
+.m-prof__lang-bar[data-lang="svelte"]     .m-prof__lang-bar-fill { background: #ff3e00; }
+.m-prof__lang-bar[data-lang="solid"]      .m-prof__lang-bar-fill { background: #2c4f7c; }
+.m-prof__lang-bar[data-lang="htmx"]       .m-prof__lang-bar-fill { background: #3a4252; }
+.m-prof__lang-bar[data-lang="astro"]      .m-prof__lang-bar-fill { background: #ff5d01; }
+.m-prof__lang-bar[data-lang="bun"]        .m-prof__lang-bar-fill { background: #fbf0df; }
+.m-prof__lang-bar[data-lang="solidity"]   .m-prof__lang-bar-fill { background: #6b4f7a; }
+.m-prof__lang-bar[data-lang="vyper"]      .m-prof__lang-bar-fill { background: #3f8a7c; }
+.m-prof__lang-bar[data-lang="c"]          .m-prof__lang-bar-fill { background: #a8b9cc; }
+.m-prof__lang-bar[data-lang="cpp"]        .m-prof__lang-bar-fill { background: #00599c; }
+.m-prof__lang-bar[data-lang="java"]       .m-prof__lang-bar-fill { background: #d9a74a; }
+.m-prof__lang-bar[data-lang="kotlin"]     .m-prof__lang-bar-fill { background: #7f52ff; }
+.m-prof__lang-bar[data-lang="csharp"]     .m-prof__lang-bar-fill { background: #5c2d91; }
+.m-prof__lang-bar[data-lang="assembly"]   .m-prof__lang-bar-fill { background: #6b6b6b; }
+.m-prof__lang-bar[data-lang="threejs"]    .m-prof__lang-bar-fill { background: #2d2d2d; }
+
+.m-prof__lang-xp {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  text-align: right;
+  font-feature-settings: "tnum";
+}
+
+/* --- BADGES (achievements) --------------------------------------- */
+/* Wrap-grid of small pill cards. Locked ones dim; unlocked ones
+   glow with their tone color. */
+
+.m-prof__badges {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.m-prof__badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 8px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-default);
+  border-radius: 12px;
+  text-align: center;
+  opacity: 0.45;
+  filter: grayscale(0.4);
+  transition: opacity 0.2s ease, filter 0.2s ease, border-color 0.2s ease;
+}
+
+.m-prof__badge--unlocked {
+  opacity: 1;
+  filter: none;
+  border-color: rgba(252, 211, 77, 0.4);
+  background:
+    linear-gradient(180deg, rgba(252, 211, 77, 0.06), transparent 70%),
+    var(--color-bg-secondary);
+}
+
+.m-prof__badge-icon {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #fcd34d;
+  background: rgba(252, 211, 77, 0.12);
+}
+
+.m-prof__badge--unlocked .m-prof__badge-icon {
+  background: rgba(252, 211, 77, 0.18);
+  box-shadow: 0 0 0 2px rgba(252, 211, 77, 0.18);
+}
+
+.m-prof__badge-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  line-height: 1.15;
+}
+
+.m-prof__badge-meta {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--color-text-tertiary);
+  font-feature-settings: "tnum";
+}
+
+.m-prof__badge--unlocked .m-prof__badge-meta {
+  color: rgba(252, 211, 77, 0.85);
 }
