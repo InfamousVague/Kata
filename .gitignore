@@ -39,6 +39,8 @@ public/starter-courses/
 *.log
 test-results/
 playwright-report/
+# `make run` device-picker cache (per-developer choice of sim/device)
+.fishbones-devices.cache
 
 # TS incremental build outputs
 *.tsbuildinfo
