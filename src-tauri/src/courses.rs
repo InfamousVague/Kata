@@ -41,11 +41,30 @@ pub fn courses_dir(app: &tauri::AppHandle) -> anyhow::Result<PathBuf> {
     Ok(courses)
 }
 
+/// Bump this when the bundled-packs content changes meaningfully (new
+/// lessons added, drill stacks authored, lesson bodies refreshed) and
+/// you want EXISTING installs to pick up the updates on their next
+/// launch without an uninstall. The persisted seed_version in
+/// `seeded-packs.json` is compared to this constant; if it's lower,
+/// every pack the user still has installed gets RE-EXTRACTED from the
+/// bundled archive (course.json overwritten, cover.png refreshed).
+/// User-deleted packs (tracked by id in `seed_ids`) stay deleted.
+///
+/// The first launch after a bump prints a one-line refresh message;
+/// subsequent launches are no-ops as before.
+///
+/// History:
+///   1 — Initial. Adds the version concept itself; refreshes existing
+///       installs so they pick up the 147 micropuzzle drills (792
+///       cards) added across 11 tutorial courses.
+const SEED_VERSION: u32 = 1;
+
 /// Import any `.fishbones` / `.kata` archives bundled under
 /// `resources/bundled-packs/` into the user's courses dir on first launch.
-/// Idempotent — never overwrites an existing course, and records every id
-/// we've seeded into `<app-data>/seeded-packs.json` so a user-deleted pack
-/// stays deleted instead of getting resurrected on the next run.
+/// Idempotent — never overwrites an existing course (unless SEED_VERSION
+/// has bumped, see above), and records every id we've seeded into
+/// `<app-data>/seeded-packs.json` so a user-deleted pack stays deleted
+/// instead of getting resurrected on the next run.
 ///
 /// This is the entry point that ships the default Rust / TypeScript / Go
 /// challenge packs along with Fishbones. Drop a `.fishbones` (or legacy
@@ -62,9 +81,15 @@ pub fn ensure_seed(app: &tauri::AppHandle) -> anyhow::Result<()> {
 
     let courses_root = courses_dir(app)?;
     let marker = marker_path(app)?;
-    let mut seeded_ids = load_seeded_ids(&marker).unwrap_or_default();
+    let mut packs = load_seeded_packs(&marker).unwrap_or_default();
+    // Refresh-mode: when the persisted seed_version is older than the
+    // current SEED_VERSION, we treat already-installed packs as
+    // candidates for re-extract. User-deleted packs (in seed_ids but
+    // not on disk) still stay deleted.
+    let needs_refresh = packs.seed_version < SEED_VERSION;
 
     let mut imported_this_run = 0u32;
+    let mut refreshed_this_run = 0u32;
     for entry in fs::read_dir(&resource_dir)? {
         let entry = entry?;
         let path = entry.path();
@@ -89,19 +114,34 @@ pub fn ensure_seed(app: &tauri::AppHandle) -> anyhow::Result<()> {
             continue;
         }
 
-        // User already has this pack — leave their copy alone (could be
-        // edited / completed lessons etc).
-        if courses_root.join(&id).join("course.json").exists() {
+        let course_exists = courses_root.join(&id).join("course.json").exists();
+
+        if course_exists {
             // Make sure the marker knows we've effectively seeded this id
             // so the user can delete it later and we won't re-import.
-            if !seeded_ids.contains(&id) {
-                seeded_ids.push(id.clone());
+            if !packs.seed_ids.contains(&id) {
+                packs.seed_ids.push(id.clone());
+            }
+            // Refresh path — we have an installed copy AND the
+            // persisted seed_version is older than the current. Wipe
+            // and re-extract so the user picks up new lessons / drills
+            // / cover artwork without an uninstall. Progress lives in
+            // progress.sqlite (separate file) so completions survive.
+            if needs_refresh {
+                if let Err(e) = unzip_to(&path, &courses_root) {
+                    eprintln!(
+                        "[fishbones:seed] refresh-extract failed for {:?}: {}",
+                        path, e
+                    );
+                    continue;
+                }
+                refreshed_this_run += 1;
             }
             continue;
         }
 
         // User previously had it + deleted — respect that decision.
-        if seeded_ids.contains(&id) {
+        if packs.seed_ids.contains(&id) {
             continue;
         }
 
@@ -110,7 +150,7 @@ pub fn ensure_seed(app: &tauri::AppHandle) -> anyhow::Result<()> {
             eprintln!("[fishbones:seed] unzip failed for {:?}: {}", path, e);
             continue;
         }
-        seeded_ids.push(id);
+        packs.seed_ids.push(id);
         imported_this_run += 1;
     }
 
@@ -120,7 +160,18 @@ pub fn ensure_seed(app: &tauri::AppHandle) -> anyhow::Result<()> {
             imported_this_run, resource_dir
         );
     }
-    save_seeded_ids(&marker, &seeded_ids)?;
+    if refreshed_this_run > 0 {
+        eprintln!(
+            "[fishbones:seed] refreshed {} pack(s) (seed_version {} → {})",
+            refreshed_this_run, packs.seed_version, SEED_VERSION
+        );
+    }
+    // Always advance the persisted seed_version so the next launch
+    // knows it's caught up. Even if zero packs needed refresh (e.g.
+    // user deleted them all), we mark this version as applied so
+    // we don't re-evaluate on every launch.
+    packs.seed_version = SEED_VERSION;
+    save_seeded_packs(&marker, &packs)?;
     Ok(())
 }
 
@@ -139,26 +190,30 @@ fn marker_path(app: &tauri::AppHandle) -> anyhow::Result<PathBuf> {
     Ok(dir.join("seeded-packs.json"))
 }
 
+/// On-disk shape of `<app-data>/seeded-packs.json`. The `seedVersion`
+/// field was added later; older marker files (without it) deserialise
+/// with `seed_version: 0` via `#[serde(default)]`, which is exactly
+/// what we want — those installs get re-evaluated against the
+/// current SEED_VERSION on the next launch and refreshed in place.
 #[derive(Default, Serialize, Deserialize)]
 struct SeededPacks {
     #[serde(default, rename = "seedIds")]
     seed_ids: Vec<String>,
+    #[serde(default, rename = "seedVersion")]
+    seed_version: u32,
 }
 
-fn load_seeded_ids(path: &Path) -> anyhow::Result<Vec<String>> {
+fn load_seeded_packs(path: &Path) -> anyhow::Result<SeededPacks> {
     if !path.exists() {
-        return Ok(Vec::new());
+        return Ok(SeededPacks::default());
     }
     let bytes = fs::read(path)?;
     let parsed: SeededPacks = serde_json::from_slice(&bytes).unwrap_or_default();
-    Ok(parsed.seed_ids)
+    Ok(parsed)
 }
 
-fn save_seeded_ids(path: &Path, ids: &[String]) -> anyhow::Result<()> {
-    let payload = SeededPacks {
-        seed_ids: ids.to_vec(),
-    };
-    let bytes = serde_json::to_vec_pretty(&payload)?;
+fn save_seeded_packs(path: &Path, packs: &SeededPacks) -> anyhow::Result<()> {
+    let bytes = serde_json::to_vec_pretty(packs)?;
     fs::write(path, bytes)?;
     Ok(())
 }

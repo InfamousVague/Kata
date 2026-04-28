@@ -9,7 +9,7 @@
 /// so progress, streak/XP, and account state flow through the existing
 /// storage and relay backends without per-platform branches.
 
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useState } from "react";
 import { useCourses } from "../hooks/useCourses";
 import { useProgress } from "../hooks/useProgress";
 import { useFishbonesCloud } from "../hooks/useFishbonesCloud";
@@ -17,6 +17,7 @@ import { useStreakAndXp } from "../hooks/useStreakAndXp";
 import type { Course, Lesson } from "../data/types";
 import MobileLibrary from "./MobileLibrary";
 import MobileLesson from "./MobileLesson";
+import MobilePractice from "./MobilePractice";
 import MobileProfile from "./MobileProfile";
 import MobileSettings from "./MobileSettings";
 import MobileSearchPalette from "./MobileSearchPalette";
@@ -25,7 +26,7 @@ import MobileTabBar, { type MobileTab } from "../components/MobileTabBar/MobileT
 import FishbonesLoader from "../components/Shared/FishbonesLoader";
 import "./MobileApp.css";
 
-type View = "library" | "lesson" | "profile" | "settings";
+type View = "library" | "lesson" | "practice" | "profile" | "settings";
 
 interface ActiveLesson {
   course: Course;
@@ -47,6 +48,15 @@ export default function MobileApp() {
   // input survives a tab switch if the user dismisses without
   // selecting.
   const [searchOpen, setSearchOpen] = useState(false);
+
+  // Hand off from index.html's inline preloader to our React loader.
+  // Runs in a layout-effect (post-DOM-mutate, pre-paint) so the inline
+  // preloader fades exactly when `<FishbonesLoader>` is on screen —
+  // no black gap on cold-start. Safe to run once; the safety timeout
+  // in main.tsx is a no-op if we got here first.
+  useLayoutEffect(() => {
+    document.body.classList.add("is-booted");
+  }, []);
 
   const lesson: Lesson | null = useMemo(() => {
     if (!active) return null;
@@ -119,11 +129,13 @@ export default function MobileApp() {
   const activeTab: MobileTab =
     view === "lesson"
       ? "courses"
-      : view === "profile"
-        ? "profile"
-        : view === "settings"
-          ? "settings"
-          : "library";
+      : view === "practice"
+        ? "practice"
+        : view === "profile"
+          ? "profile"
+          : view === "settings"
+            ? "settings"
+            : "library";
 
   return (
     <div className="m-app">
@@ -159,6 +171,9 @@ export default function MobileApp() {
             isCompleted={completed.has(`${active.course.id}:${lesson.id}`)}
           />
         )}
+        {view === "practice" && (
+          <MobilePractice courses={courses} completed={completed} />
+        )}
         {view === "profile" && (
           <MobileProfile
             courses={courses}
@@ -185,6 +200,7 @@ export default function MobileApp() {
         onLesson={() => {
           if (active) setView("lesson");
         }}
+        onPractice={() => setView("practice")}
         onProfile={() => setView("profile")}
         onSettings={() => setView("settings")}
       />

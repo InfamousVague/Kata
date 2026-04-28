@@ -29,6 +29,7 @@ use std::time::Instant;
 
 use serde::Serialize;
 use tauri::Manager;
+use tauri_plugin_opener::OpenerExt;
 
 #[derive(Debug, Serialize)]
 pub struct SubprocessResult {
@@ -95,8 +96,23 @@ async fn run_swift(code: String) -> SubprocessResult {
 /// so we just need to forward it. We sanity-check it's
 /// `[A-Za-z0-9_-]+` to avoid splicing attacker-controlled bytes into
 /// the URL via a crafted invoke call from a compromised renderer.
+///
+/// IMPORTANT: we route through `app.opener().open_url(...)` (the
+/// `OpenerExt` instance method), NOT the bare
+/// `tauri_plugin_opener::open_url()` free function. The free function
+/// uses the cross-platform `open` crate, which on iOS shells out to
+/// `xdg-open` / `open` — both forbidden by the iOS app sandbox, so the
+/// call returns "Operation not permitted" and Sign-In-with-Apple dies
+/// before reaching Safari. The instance method has separate
+/// `#[cfg(desktop)]` / `#[cfg(mobile)]` impls; the mobile one runs the
+/// plugin's Swift `open` handler which calls
+/// `UIApplication.shared.open(url)` correctly.
 #[tauri::command]
-async fn start_oauth(provider: String, session_id: String) -> Result<(), String> {
+async fn start_oauth<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    provider: String,
+    session_id: String,
+) -> Result<(), String> {
     if provider != "apple" && provider != "google" {
         return Err(format!(
             "unsupported provider: {provider} (expected apple or google)"
@@ -112,7 +128,8 @@ async fn start_oauth(provider: String, session_id: String) -> Result<(), String>
     let url = format!(
         "https://api.mattssoftware.com/fishbones/auth/{provider}/start?session={session_id}"
     );
-    tauri_plugin_opener::open_url(&url, None::<&str>)
+    app.opener()
+        .open_url(url, None::<&str>)
         .map_err(|e| format!("failed to open browser: {e}"))?;
     Ok(())
 }
@@ -229,3 +246,5 @@ pub fn run() {
 // next + animations 1777341549
 // micropuzzle 1777342507
 // 147 drills + 792 cards 1777343961
+// SEED_VERSION refresh path 1777350092
+// practice tab + 2060 cards 1777355284

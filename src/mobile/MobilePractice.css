@@ -1,0 +1,169 @@
+/* Mobile Practice tab. Shares the same outer-padding rhythm as
+   Library / Profile so the three top-level views read as siblings. */
+
+.m-prac {
+  padding: 18px 16px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Title + subtitle on the left, shuffle button on the far right —
+   same pattern Library / Profile use for their search affordance. */
+.m-prac__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.m-prac__head-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.m-prac__title {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0;
+  color: var(--color-text-primary);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.m-prac__title svg {
+  /* Tone the dumbbell back so the wordmark dominates. The icon is
+     orientation, not branding. */
+  opacity: 0.78;
+}
+
+.m-prac__subtitle {
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* Shuffle button — same shape as the Library/Profile search button so
+   the three tabs look cousin'd. Flips the icon by 12° on press for a
+   tactile cue. */
+.m-prac__shuffle {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  background: var(--color-bg-elevated, #19191d);
+  border: 1px solid var(--color-border-default, rgba(255, 255, 255, 0.08));
+  color: var(--color-text-secondary);
+  border-radius: 10px;
+  cursor: pointer;
+  font: inherit;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.12s ease, color 0.12s ease, transform 0.18s
+    cubic-bezier(0.22, 1, 0.36, 1);
+  /* Nudge down so it visually centers against the title baseline. */
+  margin-top: 4px;
+}
+
+.m-prac__shuffle:active:not(:disabled) {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  transform: rotate(12deg);
+}
+
+.m-prac__shuffle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Filter pills — copy the Library variant exactly so the row reads
+   the same across both screens. */
+.m-prac__filter {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  gap: 8px;
+  padding: 2px 0 4px;
+  scrollbar-width: none;
+}
+
+.m-prac__filter::-webkit-scrollbar {
+  display: none;
+}
+
+.m-prac__pill {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-default);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  white-space: nowrap;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s
+    ease;
+}
+
+.m-prac__pill:active {
+  background: var(--color-bg-elevated);
+}
+
+.m-prac__pill--active {
+  background: var(--color-text-primary);
+  color: var(--color-bg-primary);
+  border-color: var(--color-text-primary);
+}
+
+.m-prac__pill-count {
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.7;
+  font-feature-settings: "tnum";
+}
+
+.m-prac__pill--active .m-prac__pill-count {
+  opacity: 0.85;
+}
+
+.m-prac__empty {
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+  margin: 12px 0 0;
+  padding: 16px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-default);
+  border-radius: 12px;
+  line-height: 1.5;
+}
+
+/* The deck itself — segments stack vertically with a small gap so the
+   transitions between languages don't visually crash. The inner
+   MobileMicroPuzzle each render their own padding via `.m-mp`, so we
+   pull our padding off here to avoid double-pad. */
+.m-prac__deck {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  /* Bottom padding clears the floating pill nav so the last card sits
+     above it. Same arithmetic as MobileLesson. */
+  padding-bottom: calc(env(safe-area-inset-bottom, 0) + 92px);
+}
+
+.m-prac__deck > .m-mp {
+  /* The MicroPuzzle's own .m-mp has horizontal padding that aligns
+     with Library / Profile. The Practice container already supplies
+     the outer 16px — kill the inner so the cards align. */
+  padding: 0;
+}

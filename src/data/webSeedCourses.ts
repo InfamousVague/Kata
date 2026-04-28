@@ -58,7 +58,11 @@ function starterUrl(path: string): string {
 /// `coverFetchedAt: undefined`, and the library shows the
 /// language-tinted fallback instead of artwork. Bumping to V3 forces
 /// those records to refresh against the current (fixed) manifest.
-const SEED_VERSION = 3;
+///
+/// V4 — adds 147 micropuzzle drills (792 cards) across 11 tutorial
+/// courses. Existing IndexedDB seeds get re-fetched so academy
+/// visitors see the drills inline without a manual reset.
+const SEED_VERSION = 4;
 
 /// Run the web seed if it hasn't run yet OR if the persisted
 /// `SEED_VERSION` is older than the current build's. Idempotent +
