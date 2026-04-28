@@ -55,3 +55,6 @@ playwright-report/
 # Compiled vite config (tsc by-product when running --noEmit on .ts file)
 vite.config.d.ts
 vite.config.js
+
+# LLM micropuzzle authoring cache (one entry per lesson, sha-keyed)
+.cache/micropuzzles/
