@@ -2,8 +2,22 @@
   padding: 18px 16px 8px;
 }
 
+/* Header layout: title block on the left, search-trigger button on
+   the far right. Flex with `space-between` so the button keeps
+   right-aligned regardless of title-block width. */
 .m-lib__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
   margin-bottom: 14px;
+}
+
+.m-lib__head-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .m-lib__title {
@@ -18,6 +32,32 @@
   font-size: 13px;
   color: var(--color-text-tertiary);
   margin: 0;
+}
+
+/* Search-trigger button — a 40px square pill matching the visual
+   weight of the bottom-tab-bar icons. Sits flush with the top of
+   the title row so a user reading top-to-bottom doesn't have to
+   look down to find search. Tapping it opens the global
+   MobileSearchPalette. */
+.m-lib__search {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  background: var(--color-bg-elevated, #19191d);
+  border: 1px solid var(--color-border-default, rgba(255, 255, 255, 0.08));
+  color: var(--color-text-secondary);
+  border-radius: 12px;
+  cursor: pointer;
+  font: inherit;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.m-lib__search:active {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
 }
 
 /* Filter pills — single horizontal-scroll row, scrollbar hidden. The

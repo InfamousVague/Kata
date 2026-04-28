@@ -6,6 +6,8 @@ import { useMemo } from "react";
 import type { Course } from "../data/types";
 import type { Completion } from "../hooks/useProgress";
 import type { StreakAndXp } from "../hooks/useStreakAndXp";
+import { Icon } from "@base/primitives/icon";
+import { search as searchIcon } from "@base/primitives/icon/icons/search";
 import "./MobileProfile.css";
 
 interface Props {
@@ -14,6 +16,10 @@ interface Props {
   stats: StreakAndXp;
   completed: Set<string>;
   onOpenLesson: (course: Course, chapterIndex: number, lessonIndex: number) => void;
+  /// Optional — fired by the top-right search button. Mirrors the
+  /// MobileLibrary signature so MobileApp can wire the same handler
+  /// to both screens.
+  onOpenSearch?: () => void;
 }
 
 interface RecentRow {
@@ -39,6 +45,7 @@ export default function MobileProfile({
   stats,
   completed,
   onOpenLesson,
+  onOpenSearch,
 }: Props) {
   // Per-course aggregates for the "in progress" rail.
   const courseProgress = useMemo(() => {
@@ -96,6 +103,16 @@ export default function MobileProfile({
     <div className="m-prof">
       <header className="m-prof__head">
         <h1 className="m-prof__title">Profile</h1>
+        {onOpenSearch && (
+          <button
+            type="button"
+            className="m-prof__search"
+            onClick={onOpenSearch}
+            aria-label="Search"
+          >
+            <Icon icon={searchIcon} size="md" color="currentColor" />
+          </button>
+        )}
       </header>
 
       <div className="m-prof__stats" role="list">

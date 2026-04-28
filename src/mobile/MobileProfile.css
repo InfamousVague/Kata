@@ -5,7 +5,15 @@
   gap: 18px;
 }
 
+/* Title left, search button on the far right. Same shape as
+   MobileLibrary's header so the two screens feel like sibling
+   surfaces — the search affordance lives in the same screen
+   position regardless of which tab you're on. */
 .m-prof__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   margin-bottom: -2px;
 }
 
@@ -14,6 +22,27 @@
   font-weight: 800;
   letter-spacing: -0.02em;
   margin: 0;
+  color: var(--color-text-primary);
+}
+
+.m-prof__search {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  background: var(--color-bg-elevated, #19191d);
+  border: 1px solid var(--color-border-default, rgba(255, 255, 255, 0.08));
+  color: var(--color-text-secondary);
+  border-radius: 12px;
+  cursor: pointer;
+  font: inherit;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.m-prof__search:active {
+  background: var(--color-bg-secondary);
   color: var(--color-text-primary);
 }
 

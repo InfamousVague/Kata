@@ -19,6 +19,7 @@ import MobileLibrary from "./MobileLibrary";
 import MobileLesson from "./MobileLesson";
 import MobileProfile from "./MobileProfile";
 import MobileSettings from "./MobileSettings";
+import MobileSearchPalette from "./MobileSearchPalette";
 import SignInDialog from "../components/SignInDialog/SignInDialog";
 import MobileTabBar, { type MobileTab } from "../components/MobileTabBar/MobileTabBar";
 import FishbonesLoader from "../components/Shared/FishbonesLoader";
@@ -40,6 +41,12 @@ export default function MobileApp() {
   const [view, setView] = useState<View>("library");
   const [active, setActive] = useState<ActiveLesson | null>(null);
   const [signInOpen, setSignInOpen] = useState(false);
+  // Cmd+K-style search overlay state. Lives at the app level (not
+  // per-view) so any screen can pop the palette and any result can
+  // navigate to a lesson without prop-drilling — and so the same
+  // input survives a tab switch if the user dismisses without
+  // selecting.
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const lesson: Lesson | null = useMemo(() => {
     if (!active) return null;
@@ -132,6 +139,7 @@ export default function MobileApp() {
             courses={courses}
             completed={completed}
             onOpenLesson={openLesson}
+            onOpenSearch={() => setSearchOpen(true)}
           />
         )}
         {view === "lesson" && active && lesson && (
@@ -158,6 +166,7 @@ export default function MobileApp() {
             stats={stats}
             completed={completed}
             onOpenLesson={openLesson}
+            onOpenSearch={() => setSearchOpen(true)}
           />
         )}
         {view === "settings" && (
@@ -186,6 +195,13 @@ export default function MobileApp() {
           onClose={() => setSignInOpen(false)}
         />
       )}
+
+      <MobileSearchPalette
+        open={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        courses={courses}
+        onOpenLesson={openLesson}
+      />
     </div>
   );
 }

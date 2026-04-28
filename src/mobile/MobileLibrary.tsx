@@ -10,12 +10,18 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Course, LanguageId } from "../data/types";
 import { useCourseCover, prefetchCovers } from "../hooks/useCourseCover";
+import { Icon } from "@base/primitives/icon";
+import { search as searchIcon } from "@base/primitives/icon/icons/search";
 import "./MobileLibrary.css";
 
 interface Props {
   courses: Course[];
   completed: Set<string>;
   onOpenLesson: (course: Course, chapterIndex: number, lessonIndex: number) => void;
+  /// Optional — fired by the top-right search button to open the
+  /// global mobile search palette. Left optional so callers that
+  /// haven't wired the palette in yet still type-check.
+  onOpenSearch?: () => void;
 }
 
 const LANG_LABELS: Partial<Record<LanguageId, string>> = {
@@ -73,6 +79,7 @@ export default function MobileLibrary({
   courses,
   completed,
   onOpenLesson,
+  onOpenSearch,
 }: Props) {
   const [filter, setFilter] = useState<LanguageId | "all">("all");
 
@@ -103,10 +110,22 @@ export default function MobileLibrary({
   return (
     <div className="m-lib">
       <header className="m-lib__head">
-        <h1 className="m-lib__title">Library</h1>
-        <p className="m-lib__subtitle">
-          {courses.length} course{courses.length === 1 ? "" : "s"}
-        </p>
+        <div className="m-lib__head-text">
+          <h1 className="m-lib__title">Library</h1>
+          <p className="m-lib__subtitle">
+            {courses.length} course{courses.length === 1 ? "" : "s"}
+          </p>
+        </div>
+        {onOpenSearch && (
+          <button
+            type="button"
+            className="m-lib__search"
+            onClick={onOpenSearch}
+            aria-label="Search"
+          >
+            <Icon icon={searchIcon} size="md" color="currentColor" />
+          </button>
+        )}
       </header>
 
       {availableLangs.length > 1 && (
