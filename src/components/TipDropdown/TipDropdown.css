@@ -1,0 +1,354 @@
+/* Tip-jar trigger + chrome-less floating deck panel.
+   Visual contract mirrors the academy CryptoTipDock so the in-app
+   experience matches what visitors see on fishbones.academy/support;
+   when changing one, change both. */
+
+.fishbones__tip-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+/* Trigger sized to match the search button next to it (26px height,
+   chip metrics). Same active-state treatment as the topbar-search:
+   subtle fill + brighter border on hover / open. */
+.fishbones__tip-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-default);
+  border-radius: 8px;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.fishbones__tip-trigger:hover,
+.fishbones__tip-trigger:focus-visible,
+.fishbones__tip-trigger--open {
+  color: var(--color-text-primary);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.18);
+  outline: none;
+}
+
+.fishbones__tip-trigger-label {
+  white-space: nowrap;
+}
+
+/* ──────────────── Panel (chrome-less) ──────────────── */
+/* The panel itself has no background, border, or shadow — only the
+   cards float, anchored beneath the trigger. */
+
+.fishbones__tip-panel {
+  position: absolute;
+  top: calc(100% + 16px);
+  /* Panel right-edge aligns with the trigger's right edge so the
+     deck always grows leftward on-page. The previous `-314px`
+     offset hung the panel past the trigger to the right, which
+     looked balanced when the trigger sat mid-bar but pushed the
+     panel off-screen whenever the topbar's right-side cluster
+     (Tip / Search / Stats) sat close to the viewport edge — the
+     panel got clipped against the window. Anchoring to right: 0
+     means cards always stay fully on-screen regardless of how
+     close the trigger is to the right edge. */
+  right: 0;
+  width: 440px;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  z-index: 200;
+  animation: fishbones-tip-panel-in 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  transform-origin: top right;
+  /* If the trigger sits within 440px of the viewport's left edge
+     (rare on desktop, possible on narrow web embeds), nudge the
+     panel right of the viewport edge by 12px instead of letting it
+     spill off. Modern browsers honour `max(0px, calc(...))`-style
+     viewport-aware clamps; the simpler `min-width` + `max-width`
+     pair is enough to keep the deck visible at common topbar
+     widths without an opaque resize observer. */
+  max-width: calc(100vw - 24px);
+}
+
+@keyframes fishbones-tip-panel-in {
+  from { opacity: 0; transform: translateY(-6px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fishbones__tip-panel { animation: none; }
+}
+
+/* ──────────────── Stack (deck) ──────────────── */
+/* Cards absolute-positioned at the same origin and offset by depth.
+   Wheel / touch / arrow keys rotate activeIdx, the data-depth attr
+   re-renders, and CSS transitions handle the smooth shuffle. */
+
+.fishbones__tip-stack {
+  position: relative;
+  height: calc(220px + (var(--deck-size, 4) - 1) * 46px);
+  margin: 0 6px;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.fishbones__tip-stack > .fishbones__tip-card {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  transition:
+    transform 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 240ms ease;
+}
+
+.fishbones__tip-stack > .fishbones__tip-card[data-depth="0"] {
+  transform: translateY(calc((var(--deck-size, 4) - 1) * 46px));
+  z-index: 100;
+}
+.fishbones__tip-stack > .fishbones__tip-card[data-depth="1"] {
+  transform: translateY(calc((var(--deck-size, 4) - 2) * 46px));
+  z-index: 99;
+  filter: brightness(0.92);
+}
+.fishbones__tip-stack > .fishbones__tip-card[data-depth="2"] {
+  transform: translateY(calc((var(--deck-size, 4) - 3) * 46px));
+  z-index: 98;
+  filter: brightness(0.86);
+}
+.fishbones__tip-stack > .fishbones__tip-card[data-depth="3"] {
+  transform: translateY(calc((var(--deck-size, 4) - 4) * 46px));
+  z-index: 97;
+  filter: brightness(0.80);
+}
+.fishbones__tip-stack > .fishbones__tip-card[data-depth="4"] {
+  transform: translateY(calc((var(--deck-size, 4) - 5) * 46px));
+  z-index: 96;
+  filter: brightness(0.74);
+}
+.fishbones__tip-stack > .fishbones__tip-card[data-depth="5"] {
+  transform: translateY(calc((var(--deck-size, 4) - 6) * 46px));
+  z-index: 95;
+  filter: brightness(0.68);
+}
+
+.fishbones__tip-stack > .fishbones__tip-card:not([data-active]) {
+  cursor: pointer;
+}
+.fishbones__tip-stack > .fishbones__tip-card:not([data-active]):hover {
+  filter: brightness(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fishbones__tip-stack > .fishbones__tip-card { transition: none; }
+}
+
+/* ──────────────── Card shell ──────────────── */
+/* Glass surface + 70/30 split with a hairline-divided right strip
+   (QR + Copy). Identical proportions to the /support card. */
+
+.fishbones__tip-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 30%;
+  border-radius: 18px;
+  overflow: hidden;
+  isolation: isolate;
+  background: rgba(15, 15, 22, 0.92);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 14px 36px rgba(0, 0, 0, 0.5);
+  min-height: 140px;
+} 
+
+.fishbones__tip-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at 100% 0%,
+    var(--brand-tint, rgba(155, 166, 237, 0.18)) 0%,
+    transparent 55%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+.fishbones__tip-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ──────────────── Main (left) zone ──────────────── */
+
+.fishbones__tip-card-main {
+  padding: 22px 22px 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-width: 0;
+  gap: 18px;
+}
+
+.fishbones__tip-card-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.fishbones__tip-card-title {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--color-text-primary);
+  line-height: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+.fishbones__tip-card-title-dot {
+  color: inherit;
+}
+
+.fishbones__tip-card-bottom {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.fishbones__tip-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+}
+
+.fishbones__tip-card-meta-label {
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  letter-spacing: 0.14em;
+}
+
+.fishbones__tip-card-meta-sep {
+  opacity: 0.5;
+}
+
+.fishbones__tip-card-meta-value {
+  font-family: var(--font-mono, "JetBrains Mono", "SF Mono", monospace);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  font-size: 11.5px;
+}
+
+.fishbones__tip-card-addr {
+  display: block;
+  font-family: var(--font-mono, "JetBrains Mono", "SF Mono", monospace);
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: -0.005em;
+  color: var(--color-text-primary);
+  word-break: break-all;
+  user-select: text;
+  -webkit-user-select: text;
+  min-width: 0;
+}
+
+/* ──────────────── Brand badge (inline with title) ──────────────── */
+
+.fishbones__tip-card-badge {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  position: relative;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+.fishbones__tip-card-badge svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.18));
+}
+
+/* ──────────────── Right strip (QR + Copy) ──────────────── */
+
+.fishbones__tip-card-strip {
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.18);
+  padding: 16px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.fishbones__tip-card-qr {
+  background: #FFFFFF;
+  padding: 5px;
+  border-radius: 8px;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.45),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.04);
+  align-self: center;
+}
+
+.fishbones__tip-card-qr-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 116px;
+}
+
+.fishbones__tip-card-copy {
+  width: 100%;
+  padding: 7px 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--color-text-secondary);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.fishbones__tip-card-copy:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.20);
+  color: var(--color-text-primary);
+}
+
+.fishbones__tip-card-copy[data-copied] {
+  background: rgba(74, 222, 128, 0.14);
+  border-color: rgba(74, 222, 128, 0.35);
+  color: #86EFAC;
+}
