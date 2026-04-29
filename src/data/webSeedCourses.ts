@@ -32,7 +32,70 @@ interface Manifest {
 }
 
 const SEEDED_KEY = "starterCoursesSeeded";
+/// Tracks the set of course ids the seeder wrote on its last successful
+/// run. On the next seed we diff against the current manifest and
+/// delete any ids that were ours-then but aren't ours-now — that's how
+/// books removed from PACK_IDS (svelte-5-complete, bun-complete,
+/// javascript-crash-course, …) actually disappear from returning
+/// visitors' libraries instead of lingering in IndexedDB forever.
+/// Stored as a JSON-serialised string[] under this meta key.
+const SEEDED_IDS_KEY = "starterCoursesSeededIds";
 const MANIFEST_PATH = "/starter-courses/manifest.json";
+
+/// Migration fallback. Versions ≤V5 of this seeder didn't track which
+/// ids it wrote, so on the first V6 run we don't know what to prune —
+/// `previousIds` reads empty even though IndexedDB likely has stale
+/// records. This is the union of every course id the web seed has
+/// ever shipped (current PACK_IDS + retired ones), used as a fallback
+/// `previousIds` for visitors mid-migration. Custom user-imported
+/// packs are never in this list, so the prune step still leaves
+/// them alone.
+const LEGACY_STARTER_IDS: ReadonlyArray<string> = [
+  "the-rust-programming-language",
+  "rust-by-example",
+  "rust-async-book",
+  "rustonomicon",
+  "eloquent-javascript",
+  "javascript-info",
+  "javascript-the-definitive-guide",
+  "you-dont-know-js-yet",
+  "composing-programs",
+  "python-crash-course",
+  "learning-go",
+  "algorithms-erickson",
+  "open-data-structures",
+  "crafting-interpreters-js",
+  "pro-git",
+  "svelte-tutorial",
+  "solidjs-fundamentals",
+  "htmx-fundamentals",
+  "astro-fundamentals",
+  "react-native",
+  "learning-react-native",
+  "fluent-react",
+  "tauri-2-fundamentals",
+  "interactive-web-development-with-three-js-and-a-frame",
+  "mastering-bitcoin",
+  "programming-bitcoin",
+  "mastering-ethereum",
+  "mastering-lightning-network",
+  "solidity-complete",
+  "vyper-fundamentals",
+  "solana-programs",
+  "viem-ethers",
+  "cryptography-fundamentals",
+  "challenges-javascript-handwritten",
+  "challenges-typescript-mo9c9k2o",
+  "challenges-python-handwritten",
+  "challenges-go-handwritten",
+  "challenges-rust-handwritten",
+  "challenges-reactnative-handwritten",
+  // Retired — explicitly listed so they're pruned on migration.
+  "bun-complete",
+  "svelte-5-complete",
+  "javascript-crash-course",
+  "challenges-reactnative-visual",
+];
 
 /// Resolve a starter-courses path relative to the active build's base
 /// URL. We don't use `vendorUrl` because that targets `/vendor/*`;
@@ -71,7 +134,17 @@ function starterUrl(path: string): string {
 /// img URL changes. Bumping the seed forces fresh `coverFetchedAt`
 /// stamps, and `useCourseCover` now appends them as `?v=<n>` —
 /// the new URL bypasses the stale cache on the next visit.
-const SEED_VERSION = 5;
+///
+/// V6 — drops books that were removed from PACK_IDS in earlier
+/// updates but lingered in returning visitors' IndexedDB because
+/// the seeder only ever WROTE records, never deleted them
+/// (svelte-5-complete, bun-complete, javascript-crash-course,
+/// challenges-reactnative-visual, …). The seeder now diffs against
+/// `starterCoursesSeededIds` and removes ids it previously wrote
+/// that aren't in the current manifest. Custom packs the user
+/// imported themselves are unaffected — only ids we know we
+/// seeded ourselves get the chop.
+const SEED_VERSION = 6;
 
 /// Run the web seed if it hasn't run yet OR if the persisted
 /// `SEED_VERSION` is older than the current build's. Idempotent +
@@ -110,6 +183,29 @@ export async function seedWebStarterCourses(): Promise<number> {
     );
     return 0;
   }
+
+  // Snapshot the ids we previously seeded so we can prune anything
+  // that's been removed from the current manifest. Without this
+  // step, books we drop from PACK_IDS hang around in IndexedDB
+  // forever — the seeder only writes, never deletes. Custom packs
+  // the user imported themselves aren't in this list, so they're
+  // not at risk of being clobbered.
+  //
+  // Migration: pre-V6 seeds didn't track this, so the meta key reads
+  // empty for returning visitors who'd benefit most from cleanup.
+  // Fall back to LEGACY_STARTER_IDS in that case so the first V6
+  // run still prunes retired books.
+  const previousIdsRaw = await metaGet<string>(SEEDED_IDS_KEY);
+  const previousIds: string[] = (() => {
+    if (!previousIdsRaw) return [...LEGACY_STARTER_IDS];
+    try {
+      const parsed = JSON.parse(previousIdsRaw);
+      return Array.isArray(parsed) ? parsed.filter((s) => typeof s === "string") : [];
+    } catch {
+      return [...LEGACY_STARTER_IDS];
+    }
+  })();
+  const currentIds = new Set(manifest.courses.map((e) => e.id));
 
   let written = 0;
   for (const entry of manifest.courses) {
@@ -151,6 +247,25 @@ export async function seedWebStarterCourses(): Promise<number> {
     }
   }
 
+  // Prune previously-seeded courses that aren't in the current
+  // manifest. We only touch ids we know we wrote ourselves — the
+  // intersection of `previousIds` (last seed's set) and "not in
+  // currentIds". User-imported packs aren't in `previousIds` so
+  // they're safe.
+  let removed = 0;
+  for (const id of previousIds) {
+    if (currentIds.has(id)) continue;
+    try {
+      await storage.deleteCourse(id);
+      removed += 1;
+    } catch (err) {
+      console.warn(
+        `[seedWebStarterCourses] failed to prune removed course ${id}:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+
   // Mark as seeded at the current SEED_VERSION even on partial
   // failure — we don't want to re-fetch the same broken pack on
   // every boot. The user can wipe their IndexedDB to retry from a
@@ -158,10 +273,12 @@ export async function seedWebStarterCourses(): Promise<number> {
   // `true`) lets us re-seed when the pack list / cover treatment
   // changes in a future build.
   await metaSet(SEEDED_KEY, SEED_VERSION);
+  await metaSet(SEEDED_IDS_KEY, JSON.stringify(Array.from(currentIds)));
 
   // eslint-disable-next-line no-console
   console.log(
-    `[seedWebStarterCourses] saved ${written}/${manifest.courses.length} starter courses`,
+    `[seedWebStarterCourses] saved ${written}/${manifest.courses.length} starter courses` +
+      (removed > 0 ? ` (pruned ${removed} no-longer-shipped)` : ""),
   );
   return written;
 }

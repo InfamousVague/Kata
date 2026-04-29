@@ -309,7 +309,6 @@ const PACK_IDS = [
   "solidjs-fundamentals",
   "htmx-fundamentals",
   "astro-fundamentals",
-  "bun-the-complete-runtime",
   "react-native",
   "learning-react-native",
   "fluent-react",
