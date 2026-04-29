@@ -277,18 +277,23 @@ const COVER_OVERRIDES = join(ROOT, "cover-overrides");
 ///   - Excluded: anything needing a system compiler (C, C++, Java,
 ///     Kotlin, C#, Assembly, Swift, SvelteKit's Node sidecar). Those
 ///     stay desktop-only.
+// IDs match the .fishbones filename without the extension. The
+// canonical source for these archives is `X10 Pro/FishbonesCourses/`,
+// which uses descriptive slugs (e.g. `bun-the-complete-runtime` rather
+// than the older `bun-complete`). Keep this list in sync with the
+// promotion script's bundled-packs directory.
 const PACK_IDS = [
   // ── Languages-as-a-foundation books ────────────────────────────
   // Long-form books that teach a language end-to-end. Order here is
   // the order the library renders them on first launch.
   "the-rust-programming-language",
   "rust-by-example",
-  "rust-async-book",
-  "rustonomicon",
+  "the-async-book-rust",
+  "the-rustonomicon",
   "eloquent-javascript",
-  "javascript-info",
+  "the-modern-javascript-tutorial-fundamentals",
   "javascript-the-definitive-guide",
-  "you-dont-know-js-yet",
+  "you-don-t-know-js-yet",
   "composing-programs",
   "python-crash-course",
   "learning-go",
@@ -296,15 +301,15 @@ const PACK_IDS = [
   // ── Computer-science fundamentals ──────────────────────────────
   "algorithms-erickson",
   "open-data-structures",
-  "crafting-interpreters-js",
+  "crafting-interpreters-javascript",
   "pro-git",
 
   // ── Frameworks + libraries ─────────────────────────────────────
-  "svelte-tutorial",
+  "learning-svelte",
   "solidjs-fundamentals",
   "htmx-fundamentals",
   "astro-fundamentals",
-  "bun-complete",
+  "bun-the-complete-runtime",
   "react-native",
   "learning-react-native",
   "fluent-react",
@@ -316,22 +321,22 @@ const PACK_IDS = [
   "programming-bitcoin",
   "mastering-ethereum",
   "mastering-lightning-network",
-  "solidity-complete",
-  "vyper-fundamentals",
-  "solana-programs",
-  "viem-ethers",
-  "cryptography-fundamentals",
+  "solidity-smart-contracts-from-first-principles",
+  "vyper-fundamentals-pythonic-smart-contracts",
+  "solana-programs-rust-on-the-svm",
+  "viem-and-ethers-js-talking-to-ethereum-from-typescript",
+  "cryptography-fundamentals-hashes-to-zk",
 
   // ── Challenge packs ───────────────────────────────────────────
-  // One per browser-runnable language. C / C++ / Java / Kotlin /
-  // C# / Assembly / Swift live in the desktop bundle but stay out
+  // One per browser-runnable language. Assembly / C / C++ / C# /
+  // Java / Kotlin / Swift live in the desktop bundle but stay out
   // of the web set because their runtimes need a system compiler.
-  "challenges-javascript-handwritten",
-  "challenges-typescript-mo9c9k2o",
-  "challenges-python-handwritten",
-  "challenges-go-handwritten",
-  "challenges-rust-handwritten",
-  "challenges-reactnative-handwritten",
+  "javascript-challenges",
+  "typescript-challenge-pack",
+  "python-challenges",
+  "go-challenges",
+  "rust-challenges",
+  "react-native-challenges",
 ];
 
 async function main() {
@@ -416,6 +421,18 @@ async function main() {
         );
       }
 
+      // Normalise the editorial tier into the manifest so the
+      // marketing site (fishbones.academy) can group cards by tier
+      // without having to fetch each course's full JSON. Legacy
+      // `PRE-RELEASE` collapses to `UNREVIEWED` to match the renamed
+      // pipeline. Anything missing or unrecognised falls back to
+      // `UNREVIEWED` so books default into the bottom section.
+      const rawStatus = course.releaseStatus;
+      const releaseStatus =
+        rawStatus === "BETA" || rawStatus === "ALPHA"
+          ? rawStatus
+          : "UNREVIEWED";
+
       manifest.push({
         id: course.id || id,
         title: course.title || id,
@@ -424,6 +441,7 @@ async function main() {
         cover: coverFile,
         sizeBytes: info.size,
         packType: course.packType || "course",
+        releaseStatus,
       });
       console.log(
         `[starter-courses] staged ${id} (${(info.size / 1024).toFixed(0)} KB)` +
