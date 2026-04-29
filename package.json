@@ -28,9 +28,17 @@
     "test:e2e:headed": "FISHBONES_E2E_SLOW=1 playwright test --headed",
     "test:e2e:debug": "playwright test --debug",
     "setup:toolchains": "bash scripts/setup-e2e-toolchains.sh",
-    "generate:challenges": "node scripts/bulk-generate-challenges.mjs"
+    "generate:challenges": "node scripts/bulk-generate-challenges.mjs",
+    "library:promote": "node scripts/promote-library-to-bundle.mjs",
+    "library:reset": "node scripts/reset-local-library.mjs",
+    "library:unreviewed": "node scripts/mark-bundled-unreviewed.mjs",
+    "library:promote-status": "node scripts/set-release-statuses.mjs"
   },
   "dependencies": {
+    "@ethereumjs/common": "^4.4.0",
+    "@ethereumjs/tx": "^5.4.0",
+    "@ethereumjs/util": "^9.1.0",
+    "@ethereumjs/vm": "^8.1.1",
     "@mattmattmattmatt/base": "file:../../Libs/base",
     "@monaco-editor/react": "^4.7.0",
     "@tauri-apps/api": "^2",
@@ -53,7 +61,8 @@
     "shiki": "^4.0.2",
     "sucrase": "^3.35.1",
     "svelte": "^5.55.5",
-    "three": "^0.160.1"
+    "three": "^0.160.1",
+    "viem": "^2.48.4"
   },
   "devDependencies": {
     "@babel/standalone": "^7.29.2",
@@ -69,6 +78,7 @@
     "jsdom": "^29.0.2",
     "typescript": "~5.8.3",
     "vite": "^7.0.4",
+    "vite-plugin-node-polyfills": "^0.26.0",
     "vitest": "^4.1.3"
   }
 }

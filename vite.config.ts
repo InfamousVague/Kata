@@ -2,6 +2,7 @@
 import { defineConfig } from "vite";
 import { resolve } from "path";
 import react from "@vitejs/plugin-react";
+import { nodePolyfills } from "vite-plugin-node-polyfills";
 
 const host = process.env.TAURI_DEV_HOST;
 
@@ -66,7 +67,30 @@ const tauriAliases = isWebBuild
   : {};
 
 export default defineConfig(async () => ({
-  plugins: [react()],
+  plugins: [
+    react(),
+    // Node-built-in shims for libraries that target Node + browser
+    // (e.g. @ethereumjs/*, readable-stream). Scoped to the modules
+    // those libraries actually reach for: `events.EventEmitter`,
+    // `buffer.Buffer`, `stream`, `util`, `crypto`. Anything else
+    // stays externalised so we don't accidentally bloat the bundle
+    // with the kitchen-sink polyfill set.
+    //
+    // Tree-shaking keeps the cost low: code paths that never import
+    // `events`/`buffer`/etc. compile to nothing here. The cost only
+    // shows up in the EVM/Vyper lazy-loaded chunk
+    // (`src/runtimes/evm.ts`, `vyper.ts`) where ethereumjs-util
+    // imports `from 'events'` for its async EventEmitter.
+    //
+    // We DON'T expose `globals.Buffer` / `globals.process` because the
+    // app itself never reaches for those globals — the polyfill just
+    // needs to satisfy the *bare specifier* imports inside ethereumjs.
+    nodePolyfills({
+      include: ["events", "buffer", "stream", "util", "crypto"],
+      globals: { Buffer: false, global: false, process: false },
+      protocolImports: false,
+    }),
+  ],
   // Web build deploys under `mattssoftware.com/fishbones/learn/`, so
   // every emitted asset URL needs that prefix. Desktop ships at the
   // webview's root (`tauri://...`) so an empty base is correct
