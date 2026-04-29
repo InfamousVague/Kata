@@ -91,7 +91,12 @@ const LEGACY_STARTER_IDS: ReadonlyArray<string> = [
   "challenges-rust-handwritten",
   "challenges-reactnative-handwritten",
   // Retired — explicitly listed so they're pruned on migration.
+  // Includes anything we shipped in any prior PACK_IDS revision but
+  // since dropped. Don't trim this list when adding new retirees;
+  // visitors who never made it past V1 are still out there with old
+  // ids in their IndexedDB.
   "bun-complete",
+  "bun-fundamentals",
   "svelte-5-complete",
   "javascript-crash-course",
   "challenges-reactnative-visual",
@@ -144,7 +149,11 @@ function starterUrl(path: string): string {
 /// that aren't in the current manifest. Custom packs the user
 /// imported themselves are unaffected — only ids we know we
 /// seeded ourselves get the chop.
-const SEED_VERSION = 6;
+///
+/// V7 — adds `bun-fundamentals` to the legacy prune list. It was
+/// in the very first PACK_IDS revision (alongside bun-complete) and
+/// got missed when V6 shipped, so V1-era seeds still showed it.
+const SEED_VERSION = 7;
 
 /// Run the web seed if it hasn't run yet OR if the persisted
 /// `SEED_VERSION` is older than the current build's. Idempotent +
