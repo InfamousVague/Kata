@@ -173,3 +173,35 @@ export function runCSharp(code: string, testCode?: string): Promise<RunResult> {
 export function runAssembly(code: string, testCode?: string): Promise<RunResult> {
   return runNative("run_asm", code, "as/ld", "assembly", testCode);
 }
+
+// ── 2026 expansion: simple-CLI runners ────────────────────────────
+// Single-binary languages — `ruby <file>`, `elixir <file>`, etc. The
+// Rust side (native_runners.rs::simple_run_one_file) just writes a
+// temp file and execs the binary; SubprocessResult shape is identical
+// to the C/Java/etc. runners above so the same `runNative` wrapper
+// handles output capture, KATA_TEST parsing, and missing-toolchain
+// banner routing for free.
+//
+// Web build: `runtimes/index.ts`'s isWeb gate short-circuits these
+// to the desktop-upsell banner before the IPC even fires, so the
+// frontend never has to handle Tauri-not-available errors here.
+
+export function runRuby(code: string, testCode?: string): Promise<RunResult> {
+  return runNative("run_ruby", code, "ruby", "ruby", testCode);
+}
+
+export function runElixir(code: string, testCode?: string): Promise<RunResult> {
+  return runNative("run_elixir", code, "elixir", "elixir", testCode);
+}
+
+export function runHaskell(code: string, testCode?: string): Promise<RunResult> {
+  return runNative("run_haskell", code, "runghc", "haskell", testCode);
+}
+
+export function runScala(code: string, testCode?: string): Promise<RunResult> {
+  return runNative("run_scala", code, "scala-cli", "scala", testCode);
+}
+
+export function runDart(code: string, testCode?: string): Promise<RunResult> {
+  return runNative("run_dart", code, "dart", "dart", testCode);
+}

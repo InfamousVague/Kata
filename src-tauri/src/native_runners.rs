@@ -578,6 +578,135 @@ pub async fn run_asm(code: String) -> SubprocessResult {
     }
 }
 
+// ── 2026 expansion: simple-CLI runners ─────────────────────────────
+//
+// Five languages whose toolchain is "one binary takes a source file
+// and runs it" — Ruby (`ruby`), Elixir (`elixir`), Haskell
+// (`runghc` from GHC), Scala (`scala-cli`), and Dart (`dart`). No
+// compile step, no per-language temp directory, no class-name
+// parsing. Each just shells out via `simple_run_one_file` below.
+//
+// Languages that need a project structure (Move, Cairo, Sway —
+// each looks for a manifest file at the working dir) are NOT here;
+// they remain as "coming soon" stubs in the JS layer until we wire
+// per-Run scaffolding (write a Cargo.toml-equivalent + invoke the
+// project-aware CLI).
+
+/// Generic single-file CLI runner: write `code` to a temp file with
+/// the given extension, then exec `binary <args> <temp>` — capture
+/// stdout/stderr, surface launch failures with a friendly install
+/// hint. Used by every simple-CLI-shaped language below.
+fn simple_run_one_file(
+    binary: &str,
+    extra_args: &[&str],
+    prefix: &str,
+    extension: &str,
+    install_hint: &str,
+    code: String,
+) -> SubprocessResult {
+    let start = Instant::now();
+    let source = match write_temp(prefix, extension, &code) {
+        Ok(p) => p,
+        Err(r) => return r,
+    };
+    let mut cmd = Command::new(binary);
+    for a in extra_args {
+        cmd.arg(a);
+    }
+    cmd.arg(&source);
+    match cmd.output() {
+        Ok(o) => from_output(o, start),
+        Err(e) => launch_failure(binary, install_hint, e, start),
+    }
+}
+
+// ---- Ruby -----------------------------------------------------------
+
+/// `ruby <file>`. macOS ships a system Ruby (Apple's bundled MRI)
+/// that's installed by default; on Linux it's a one-liner via the
+/// distro package manager.
+#[tauri::command]
+pub async fn run_ruby(code: String) -> SubprocessResult {
+    simple_run_one_file(
+        "ruby",
+        &[],
+        "ruby",
+        "rb",
+        "install Ruby (`brew install ruby` / `apt install ruby`).",
+        code,
+    )
+}
+
+// ---- Elixir ---------------------------------------------------------
+
+/// `elixir <file>`. Lessons use `.exs` (Elixir script) so we don't
+/// require a Mix project. Pure module-level expressions work fine
+/// at this size.
+#[tauri::command]
+pub async fn run_elixir(code: String) -> SubprocessResult {
+    simple_run_one_file(
+        "elixir",
+        &[],
+        "elixir",
+        "exs",
+        "install Elixir (`brew install elixir` on macOS, `asdf install elixir` for cross-platform).",
+        code,
+    )
+}
+
+// ---- Haskell --------------------------------------------------------
+
+/// `runghc <file>`. `runghc` is bundled with every GHC install and
+/// runs Haskell as a script (compile+run in one shot, throws away
+/// the binary). For lesson-sized snippets that's the right choice
+/// — `ghc` would leave .hi / .o droppings beside the temp source.
+#[tauri::command]
+pub async fn run_haskell(code: String) -> SubprocessResult {
+    simple_run_one_file(
+        "runghc",
+        &[],
+        "haskell",
+        "hs",
+        "install GHC via GHCup (`curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | sh`).",
+        code,
+    )
+}
+
+// ---- Scala ----------------------------------------------------------
+
+/// `scala-cli run <file>`. scala-cli is the modern recommended way
+/// to run Scala scripts — it handles dependency resolution + JVM
+/// boot automatically. The classic `scala` REPL would also work
+/// but scala-cli is the path Scala 3 docs steer learners toward.
+#[tauri::command]
+pub async fn run_scala(code: String) -> SubprocessResult {
+    simple_run_one_file(
+        "scala-cli",
+        &["run"],
+        "scala",
+        "scala",
+        "install scala-cli (`brew install Virtuslab/scala-cli/scala-cli` or see https://scala-cli.virtuslab.org/install).",
+        code,
+    )
+}
+
+// ---- Dart -----------------------------------------------------------
+
+/// `dart run <file>`. The `dart` command resolves to the Dart SDK
+/// binary; `run <file>` executes a single .dart entrypoint without
+/// requiring a `pubspec.yaml`. Most lesson-sized programs work.
+#[tauri::command]
+pub async fn run_dart(code: String) -> SubprocessResult {
+    simple_run_one_file(
+        "dart",
+        &["run"],
+        "dart",
+        "dart",
+        "install the Dart SDK (`brew install dart-sdk` or see https://dart.dev/get-dart).",
+        code,
+    )
+}
+
 // ---- Silence unused-import in builds where none of the commands are
 // actually wired yet. Harmless in production.
 #[allow(dead_code)]

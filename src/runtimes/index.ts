@@ -153,20 +153,28 @@ export async function runCode(
       // Run gets a fresh in-memory database; tests use leading
       // `-- expect:` comments to assert row count + first-row shape.
       return runSql(code, testCode);
+    // ── Simple-CLI subprocess languages (desktop-only) ──
+    // Each writes the user code to a temp file and invokes the
+    // host's installed binary. Web build short-circuits these via
+    // the `isWeb && !canRun(language)` gate above before reaching
+    // here, so the lazy-import never tries to fire a Tauri IPC
+    // from the browser.
     case "ruby":
-    case "haskell":
-    case "scala":
-    case "dart":
+      return (await import("./nativeRunners")).runRuby(code, testCode);
     case "elixir":
+      return (await import("./nativeRunners")).runElixir(code, testCode);
+    case "haskell":
+      return (await import("./nativeRunners")).runHaskell(code, testCode);
+    case "scala":
+      return (await import("./nativeRunners")).runScala(code, testCode);
+    case "dart":
+      return (await import("./nativeRunners")).runDart(code, testCode);
+    // Move / Cairo / Sway need project scaffolding (manifest +
+    // package layout) before their toolchains will run. Stubbed
+    // until we add a per-Run scaffolding step in the Rust backend.
     case "move":
     case "cairo":
     case "sway":
-      // Reserved-but-not-yet-wired runtimes. `runComingSoon` returns
-      // a `desktopOnly`-shaped RunResult so OutputPane renders the
-      // upsell banner with a per-language install hint. As each
-      // language's real runner lands (host subprocess on desktop,
-      // sandbox proxy / vendored WASM on web), drop its case from
-      // this group and add a real `case "<lang>": return runX(...)`.
       return runComingSoon(language);
     default:
       // Exhaustiveness guard. If a new LanguageId slips in without
