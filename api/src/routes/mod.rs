@@ -12,6 +12,8 @@
 //! Endpoint summary:
 //!   POST   /fishbones/auth/signup                    — email + password
 //!   POST   /fishbones/auth/login                     — email + password
+//!   POST   /fishbones/auth/password-reset/request    — email link
+//!   POST   /fishbones/auth/password-reset/confirm    — token + new password
 //!   POST   /fishbones/auth/apple                     — Apple identity_token
 //!   POST   /fishbones/auth/google                    — Google id_token
 //!   GET    /fishbones/auth/google/start              — browser OAuth
@@ -62,6 +64,20 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route("/health", get(health_check))
         .route("/fishbones/auth/signup", post(auth::signup))
         .route("/fishbones/auth/login", post(auth::login))
+        // Password-reset request + confirm. Both endpoints are
+        // unauthenticated — the request endpoint is gated by email
+        // ownership (you only get the token if you can read the
+        // inbox), the confirm endpoint by possession of that token.
+        // The request handler always returns 204 regardless of
+        // whether the email is registered, to avoid enumeration.
+        .route(
+            "/fishbones/auth/password-reset/request",
+            post(auth::password_reset_request),
+        )
+        .route(
+            "/fishbones/auth/password-reset/confirm",
+            post(auth::password_reset_confirm),
+        )
         // Direct id_token paths — clients call these when they have a
         // native-SDK token in hand.
         .route("/fishbones/auth/apple", post(auth::apple))

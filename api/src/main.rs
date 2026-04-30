@@ -17,6 +17,7 @@
 
 mod auth;
 mod db;
+mod mailer;
 mod routes;
 mod state;
 
@@ -73,6 +74,30 @@ async fn main() -> anyhow::Result<()> {
     let public_url = read_env("PUBLIC_URL");
     let apple_domain_association_file = read_env("APPLE_DOMAIN_ASSOCIATION_FILE");
 
+    // ── Mailer (Resend) ─────────────────────────────────────────
+    // Optional. When unset we still construct a Mailer; sends fall
+    // through to a `tracing::warn!` so the password-reset URL is
+    // recoverable from `journalctl -u fishbones-api`.
+    let resend_api_key = read_env("RESEND_API_KEY");
+    let resend_from = read_env("RESEND_FROM");
+    let resend_from_name = read_env("RESEND_FROM_NAME");
+    let mailer = crate::mailer::Mailer::from_env(
+        resend_api_key,
+        resend_from,
+        resend_from_name,
+    );
+    if mailer.is_resend_configured() {
+        tracing::info!("Mailer: Resend configured");
+    } else {
+        tracing::info!(
+            "Mailer: Resend not configured — password-reset URLs will be logged via tracing instead. Set RESEND_API_KEY + RESEND_FROM to enable email delivery."
+        );
+    }
+    // Where the password-reset email's link points. Defaults to the
+    // public marketing site since that's where /reset-password lives.
+    let web_base_url = read_env("WEB_BASE_URL")
+        .unwrap_or_else(|| "https://fishbones.academy".to_string());
+
     let oauth_flow_ready = public_url.is_some()
         && (google_client_secret.is_some() || apple_private_key_pem.is_some());
     if !oauth_flow_ready {
@@ -94,6 +119,8 @@ async fn main() -> anyhow::Result<()> {
     // ── App state ───────────────────────────────────────────────
     let state = Arc::new(AppState {
         db,
+        mailer,
+        web_base_url,
         apple_audience,
         google_audience,
         google_client_secret,

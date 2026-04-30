@@ -70,6 +70,15 @@ export interface UseFishbonesCloud {
   signInEmail: (email: string, password: string) => Promise<void>;
   signInApple: (identityToken: string, displayName?: string) => Promise<void>;
   signInGoogle: (identityToken: string, displayName?: string) => Promise<void>;
+  /// Ask the relay to send a password-reset email. Always resolves
+  /// (never rejects) regardless of whether the email is registered —
+  /// the relay returns 204 in both cases to avoid leaking which
+  /// emails have accounts. UI should show "if your email is on file,
+  /// you'll get a link" rather than confirming the address exists.
+  requestPasswordReset: (email: string) => Promise<void>;
+  /// Submit the token + new password from the reset email. Throws on
+  /// 401 ("link is invalid or expired") so the UI can surface it.
+  confirmPasswordReset: (token: string, newPassword: string) => Promise<void>;
   /// Adopt a token issued by the browser-OAuth relay flow (Apple SIWA
   /// or Google) without re-running the auth POST. The desktop deep-
   /// link handler calls this once it parses `fishbones://oauth/done`.
@@ -284,6 +293,74 @@ export function useFishbonesCloud(): UseFishbonesCloud {
     [runAuth, deviceLabel],
   );
 
+  /// Ask the relay to email a reset link. Treats every response as a
+  /// success — the relay returns 204 whether or not the email is
+  /// registered, so UI can't tell either way. Network failures still
+  /// reject (so the UI can show "we couldn't reach the server").
+  const requestPasswordReset = useCallback(
+    async (email: string) => {
+      setBusy(true);
+      setError(null);
+      try {
+        const res = await fetch(`${relayUrl}/fishbones/auth/password-reset/request`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        });
+        if (!res.ok && res.status !== 204) {
+          // 5xx — relay is down. Surface it; the request endpoint
+          // never 4xxs (intentionally permissive for enumeration
+          // resistance) so any 4xx here would be a programming bug.
+          throw new Error(`reset request failed (${res.status})`);
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setError(msg);
+        throw e;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [relayUrl],
+  );
+
+  /// Submit token + new password to the relay. 401 means the token
+  /// was unknown / expired / consumed; 400 means the password failed
+  /// the relay's length check. Both surface as thrown errors so the
+  /// dialog can render them inline; the UI never auto-signs-in
+  /// after a successful confirm — the user re-enters their freshly-
+  /// changed password through the normal Sign in path so they
+  /// confirm it works.
+  const confirmPasswordReset = useCallback(
+    async (token: string, newPassword: string) => {
+      setBusy(true);
+      setError(null);
+      try {
+        const res = await fetch(`${relayUrl}/fishbones/auth/password-reset/confirm`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token, new_password: newPassword }),
+        });
+        if (res.status === 401) {
+          throw new Error("This reset link is invalid or has expired. Request a new one.");
+        }
+        if (res.status === 400) {
+          throw new Error("Password didn't meet the minimum length (8 characters).");
+        }
+        if (!res.ok && res.status !== 204) {
+          throw new Error(`reset confirm failed (${res.status})`);
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setError(msg);
+        throw e;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [relayUrl],
+  );
+
   /// Adopt a token from the browser-OAuth deep-link callback. The relay
   /// minted it server-side after exchanging the provider code, so we
   /// just need to persist it locally and let the `/me`-on-mount effect
@@ -466,6 +543,8 @@ export function useFishbonesCloud(): UseFishbonesCloud {
       signInEmail,
       signInApple,
       signInGoogle,
+      requestPasswordReset,
+      confirmPasswordReset,
       applyOAuthToken,
       signOut,
       deleteAccount,
@@ -487,6 +566,8 @@ export function useFishbonesCloud(): UseFishbonesCloud {
       signInEmail,
       signInApple,
       signInGoogle,
+      requestPasswordReset,
+      confirmPasswordReset,
       applyOAuthToken,
       signOut,
       deleteAccount,

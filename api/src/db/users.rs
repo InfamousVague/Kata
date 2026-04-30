@@ -143,6 +143,121 @@ impl Database {
         Ok(row)
     }
 
+    /// Look up a user_id from an email. Returns `None` for unknown
+    /// emails so the caller can decide how to surface the result —
+    /// the password-reset request endpoint deliberately responds 204
+    /// regardless of existence to avoid email enumeration.
+    pub fn find_user_id_by_email(
+        &self,
+        email: &str,
+    ) -> anyhow::Result<Option<String>> {
+        let conn = self.conn_lock();
+        let id: Option<String> = conn
+            .query_row(
+                "SELECT id FROM users WHERE email = ?1",
+                params![email],
+                |r| r.get(0),
+            )
+            .optional()?;
+        Ok(id)
+    }
+
+    /// Replace the password hash on an existing user. Used by the
+    /// password-reset confirm endpoint after a token has been validated.
+    /// Bumps `updated_at` so the audit trail picks it up.
+    pub fn update_password_hash(
+        &self,
+        user_id: &str,
+        new_password_hash: &str,
+    ) -> anyhow::Result<()> {
+        let conn = self.conn_lock();
+        conn.execute(
+            "UPDATE users SET password_hash = ?2, updated_at = datetime('now') WHERE id = ?1",
+            params![user_id, new_password_hash],
+        )?;
+        Ok(())
+    }
+
+    /// Insert a fresh password-reset entry. The caller hashes the
+    /// random plaintext token before passing the hash here — we never
+    /// store the plaintext, mirroring the `tokens` table posture.
+    /// `ttl_secs` is added to the current timestamp via SQLite's
+    /// `datetime` arithmetic so the expiry is server-clock-relative.
+    pub fn create_password_reset(
+        &self,
+        token_hash: &str,
+        user_id: &str,
+        ttl_secs: i64,
+    ) -> anyhow::Result<()> {
+        let conn = self.conn_lock();
+        conn.execute(
+            "INSERT INTO password_resets (token_hash, user_id, expires_at) \
+             VALUES (?1, ?2, datetime('now', ?3))",
+            params![token_hash, user_id, format!("+{ttl_secs} seconds")],
+        )?;
+        Ok(())
+    }
+
+    /// Atomically consume a reset token: returns the associated user
+    /// id when the hash matches a row that's not yet expired AND not
+    /// already consumed, then DELETEs the row so the same token
+    /// can't be reused. Returns `None` for any failure mode (unknown,
+    /// expired, already-consumed) so the handler can collapse all of
+    /// them to a single user-facing "link is invalid or expired"
+    /// message — leaking which specific case is unhelpful and gives
+    /// brute-forcers a side channel.
+    pub fn consume_password_reset(
+        &self,
+        token_hash: &str,
+    ) -> anyhow::Result<Option<String>> {
+        let conn = self.conn_lock();
+        // Single statement DELETE…RETURNING keeps the lookup +
+        // invalidation atomic. The `expires_at >= now` filter rejects
+        // stale tokens; `consumed_at IS NULL` rejects double-spends
+        // (defensive — we DELETE on consume, but a race-window or a
+        // future feature might keep the row around).
+        let user_id: Option<String> = conn
+            .query_row(
+                "DELETE FROM password_resets \
+                 WHERE token_hash = ?1 \
+                   AND consumed_at IS NULL \
+                   AND expires_at >= datetime('now') \
+                 RETURNING user_id",
+                params![token_hash],
+                |r| r.get(0),
+            )
+            .optional()?;
+        Ok(user_id)
+    }
+
+    /// Sweep expired or consumed reset rows. Cheap to run periodically
+    /// (no index scan — `expires_at` comparison + a single DELETE).
+    /// Currently invoked from the request handler so each new request
+    /// pays a small cleanup tax and the table doesn't accumulate dead
+    /// rows over time.
+    pub fn sweep_password_resets(&self) -> anyhow::Result<usize> {
+        let conn = self.conn_lock();
+        let n = conn.execute(
+            "DELETE FROM password_resets \
+             WHERE expires_at < datetime('now') OR consumed_at IS NOT NULL",
+            params![],
+        )?;
+        Ok(n)
+    }
+
+    /// Revoke every active token for a user. Used after a password
+    /// reset — the user's previous sessions on other devices should
+    /// be forced to re-authenticate, both as a security measure and
+    /// so a stolen credential is fully cut off.
+    pub fn revoke_all_tokens(&self, user_id: &str) -> anyhow::Result<usize> {
+        let conn = self.conn_lock();
+        let n = conn.execute(
+            "DELETE FROM tokens WHERE user_id = ?1",
+            params![user_id],
+        )?;
+        Ok(n)
+    }
+
     pub fn email_exists(&self, email: &str) -> anyhow::Result<bool> {
         let conn = self.conn_lock();
         let count: i64 = conn.query_row(

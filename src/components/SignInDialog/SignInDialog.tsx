@@ -42,7 +42,12 @@ interface Props {
 /// give the user a clear next step ("forgot? switch to Sign in" /
 /// "no account? switch to Create account") and let us tailor the
 /// password input (strength meter on signup, plain on signin).
-type EmailMode = "signIn" | "signUp";
+///
+/// `forgot` is a tertiary state reachable from `signIn` only. We
+/// treat it as a peer mode here (rather than a separate sub-component)
+/// so the same form shell, error slot, and switch-link affordance
+/// stay in sync without a second markup tree.
+type EmailMode = "signIn" | "signUp" | "forgot";
 
 /// Generate a URL-safe random session id. The relay uses this to
 /// correlate the browser-side OAuth flow with the desktop callback,
@@ -90,6 +95,12 @@ export default function SignInDialog({
   /// in. Distinct from the existing `signedIn`-watcher close so the
   /// learner sees a beat of "you're in" copy before the modal closes.
   const [createdNotice, setCreatedNotice] = useState(false);
+  /// Shown after a successful password-reset email submit. The relay
+  /// returns 204 whether or not the email is registered (anti-
+  /// enumeration), so the copy is deliberately ambiguous: "if your
+  /// email is on file, you'll get a link." Stays up until the user
+  /// clicks back to Sign in.
+  const [forgotSent, setForgotSent] = useState(false);
   /// `true` once the user clicks "Continue with Apple/Google" and the
   /// system browser has been launched. We stay in this state until the
   /// deep-link callback fires and `cloud.signedIn` flips. If the user
@@ -165,17 +176,34 @@ export default function SignInDialog({
     }
   };
 
-  /// Reset the local error state + confirm field when the user
-  /// switches modes — the previous mode's error becomes irrelevant
-  /// ("password too short" from a signup attempt shouldn't linger
-  /// when the user clicks Sign in to retry an existing account), and
-  /// a stale confirm value would cause a "passwords don't match"
-  /// flash if they switched back to signup later.
+  /// Reset the local error state + confirm field + forgot-sent
+  /// notice when the user switches modes — each mode owns its own
+  /// transient state and shouldn't inherit stale messages from the
+  /// previous one ("password too short" from signup, "check your
+  /// email" from forgot, etc.).
   const switchEmailMode = (next: EmailMode) => {
     setEmailMode(next);
     setEmailError(null);
     setCreatedNotice(false);
+    setForgotSent(false);
     setPasswordConfirm("");
+  };
+
+  /// Submit the forgot-password email. The relay returns 204 in
+  /// every non-error case (no enumeration), so on success we just
+  /// flip into a "check your email" view. Errors here only happen
+  /// for true server / network failures.
+  const onForgotSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEmailError(null);
+    setForgotSent(false);
+    try {
+      await cloud.requestPasswordReset(email);
+      setForgotSent(true);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setEmailError(msg || "Couldn't reach the server. Please try again.");
+    }
   };
 
   /// Inline mismatch hint shown under the confirm field while the
@@ -348,126 +376,173 @@ export default function SignInDialog({
             their email shouldn't have to first click "Email" to
             see the form. */}
         <form
-          onSubmit={emailMode === "signIn" ? onSignInSubmit : onSignUpSubmit}
+          onSubmit={
+            emailMode === "signIn"
+              ? onSignInSubmit
+              : emailMode === "signUp"
+                ? onSignUpSubmit
+                : onForgotSubmit
+          }
           className="fishbones-signin-form"
         >
           {/* Mode toggle — segmented Sign in / Create account.
-              Replaces the old "we'll figure out which one" copy
-              with an explicit choice. The submit handler, button
-              label, password autocomplete, strength meter, and
-              cross-link below all key off this state. */}
-          <div className="fishbones-signin-mode-toggle" role="tablist" aria-label="Email account mode">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={emailMode === "signIn"}
-              className={`fishbones-signin-mode-btn ${emailMode === "signIn" ? "fishbones-signin-mode-btn--active" : ""}`}
-              onClick={() => switchEmailMode("signIn")}
-            >
-              Sign in
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={emailMode === "signUp"}
-              className={`fishbones-signin-mode-btn ${emailMode === "signUp" ? "fishbones-signin-mode-btn--active" : ""}`}
-              onClick={() => switchEmailMode("signUp")}
-            >
-              Create account
-            </button>
-          </div>
+              Hidden in `forgot` mode (the form there is a single
+              email field, no Sign in vs Create account distinction
+              to make). */}
+          {emailMode !== "forgot" && (
+            <div className="fishbones-signin-mode-toggle" role="tablist" aria-label="Email account mode">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={emailMode === "signIn"}
+                className={`fishbones-signin-mode-btn ${emailMode === "signIn" ? "fishbones-signin-mode-btn--active" : ""}`}
+                onClick={() => switchEmailMode("signIn")}
+              >
+                Sign in
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={emailMode === "signUp"}
+                className={`fishbones-signin-mode-btn ${emailMode === "signUp" ? "fishbones-signin-mode-btn--active" : ""}`}
+                onClick={() => switchEmailMode("signUp")}
+              >
+                Create account
+              </button>
+            </div>
+          )}
+
+          {/* Forgot-mode header — explain what's about to happen
+              before the user types their email. The "check your
+              email" success state replaces this prompt entirely so
+              the visible affordance always matches the current
+              step in the flow. */}
+          {emailMode === "forgot" && !forgotSent && (
+            <p className="fishbones-signin-helper">
+              Enter your account email and we'll send a link to reset
+              your password. The link expires in 1 hour.
+            </p>
+          )}
 
           <label className="fishbones-signin-field">
-              <span>Email</span>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-              />
-            </label>
-
-            {/* Reusable PasswordField — strength meter only shows on
-                Create account where it's actionable. autoComplete
-                flips between current-password (Sign in) and
-                new-password (Create account) so password managers
-                pick the right slot. */}
-          <PasswordField
-            value={password}
-            onChange={setPassword}
-            showStrength={emailMode === "signUp"}
-            autoComplete={emailMode === "signUp" ? "new-password" : "current-password"}
-            required
-            disabled={cloud.busy}
-            helper={
-              emailMode === "signUp"
-                ? `At least ${PASSWORD_MIN_LENGTH} characters. Mix cases, digits, and symbols for a stronger password.`
-                : null
-            }
-          />
-
-          {/* Confirm-password field — only on Create account. The
-              inline `error` prop tints the border + replaces the
-              helper line with "Passwords don't match" once the
-              user has typed enough characters that a mismatch is
-              a typo rather than mid-edit. autoComplete=new-password
-              so password managers don't try to fill an existing
-              credential here. */}
-          {emailMode === "signUp" && (
-            <PasswordField
-              value={passwordConfirm}
-              onChange={setPasswordConfirm}
-              label="Confirm password"
-              showStrength={false}
-              autoComplete="new-password"
+            <span>Email</span>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               required
-              disabled={cloud.busy}
-              helper={null}
-              error={confirmMismatch ? "Passwords don't match" : null}
+              autoComplete="email"
+              disabled={cloud.busy || forgotSent}
             />
+          </label>
+
+          {/* Password fields — Sign in + Create account only.
+              Forgot mode is email-only. */}
+          {emailMode !== "forgot" && (
+            <>
+              {/* Reusable PasswordField — strength meter only shows on
+                  Create account where it's actionable. autoComplete
+                  flips between current-password (Sign in) and
+                  new-password (Create account) so password managers
+                  pick the right slot. */}
+              <PasswordField
+                value={password}
+                onChange={setPassword}
+                showStrength={emailMode === "signUp"}
+                autoComplete={emailMode === "signUp" ? "new-password" : "current-password"}
+                required
+                disabled={cloud.busy}
+                helper={
+                  emailMode === "signUp"
+                    ? `At least ${PASSWORD_MIN_LENGTH} characters. Mix cases, digits, and symbols for a stronger password.`
+                    : null
+                }
+              />
+
+              {/* Confirm-password field — only on Create account. The
+                  inline `error` prop tints the border + replaces the
+                  helper line with "Passwords don't match" once the
+                  user has typed enough characters that a mismatch is
+                  a typo rather than mid-edit. autoComplete=new-password
+                  so password managers don't try to fill an existing
+                  credential here. */}
+              {emailMode === "signUp" && (
+                <PasswordField
+                  value={passwordConfirm}
+                  onChange={setPasswordConfirm}
+                  label="Confirm password"
+                  showStrength={false}
+                  autoComplete="new-password"
+                  required
+                  disabled={cloud.busy}
+                  helper={null}
+                  error={confirmMismatch ? "Passwords don't match" : null}
+                />
+              )}
+            </>
           )}
 
           {emailError && (
             <p className="fishbones-signin-error">{emailError}</p>
           )}
-          {createdNotice && !emailError && (
+          {createdNotice && !emailError && emailMode === "signUp" && (
             <p className="fishbones-signin-helper fishbones-signin-helper--success">
               Welcome! Account created — signing you in…
             </p>
           )}
+          {forgotSent && !emailError && (
+            <p className="fishbones-signin-helper fishbones-signin-helper--success">
+              If that email is on file, a reset link is on its way. Check
+              your inbox (and spam folder) — the link expires in 1 hour.
+            </p>
+          )}
 
-          <button
-            type="submit"
-            className="fishbones-signin-primary"
-            disabled={
-              cloud.busy ||
-              email.length === 0 ||
-              password.length === 0 ||
-              // On Create account, also block when the password is
-              // below the relay's minimum, when the confirm field is
-              // empty, or when confirm doesn't match. Sign in
-              // doesn't gate on length — a legacy account might
-              // pre-date today's policy.
-              (emailMode === "signUp" &&
-                (scorePassword(password).belowMinLength ||
-                  passwordConfirm.length === 0 ||
-                  password !== passwordConfirm))
-            }
-          >
-            {cloud.busy
-              ? "…"
-              : emailMode === "signIn"
-                ? "Sign in"
-                : "Create account"}
-          </button>
+          {/* Submit button — hidden in forgot+sent state since the
+              user's next action is to switch back to Sign in via the
+              cross-link below. */}
+          {!(emailMode === "forgot" && forgotSent) && (
+            <button
+              type="submit"
+              className="fishbones-signin-primary"
+              disabled={
+                cloud.busy ||
+                email.length === 0 ||
+                // Forgot mode is email-only — no password gate. Sign
+                // in + Create account both need a password. Create
+                // account additionally needs the password to meet the
+                // minimum length AND the confirm field to match.
+                (emailMode !== "forgot" && password.length === 0) ||
+                (emailMode === "signUp" &&
+                  (scorePassword(password).belowMinLength ||
+                    passwordConfirm.length === 0 ||
+                    password !== passwordConfirm))
+              }
+            >
+              {cloud.busy
+                ? "…"
+                : emailMode === "signIn"
+                  ? "Sign in"
+                  : emailMode === "signUp"
+                    ? "Create account"
+                    : "Send reset link"}
+            </button>
+          )}
 
-          {/* Cross-link — gives the user an unmistakable next step
-              when they realise they're on the wrong mode. Buttons
-              instead of <a> tags so we stay inside the dialog. */}
+          {/* Cross-links — gives the user an unmistakable next step
+              when they realise they're on the wrong mode. Sign in
+              gets two: "Forgot password?" + "Don't have an account?".
+              Buttons instead of <a> tags so we stay inside the dialog. */}
           <p className="fishbones-signin-switch">
-            {emailMode === "signIn" ? (
+            {emailMode === "signIn" && (
               <>
+                <button
+                  type="button"
+                  className="fishbones-signin-switch__link"
+                  onClick={() => switchEmailMode("forgot")}
+                >
+                  Forgot password?
+                </button>
+                {" · "}
                 Don't have an account?{" "}
                 <button
                   type="button"
@@ -477,7 +552,8 @@ export default function SignInDialog({
                   Create one
                 </button>
               </>
-            ) : (
+            )}
+            {emailMode === "signUp" && (
               <>
                 Already have an account?{" "}
                 <button
@@ -486,6 +562,18 @@ export default function SignInDialog({
                   onClick={() => switchEmailMode("signIn")}
                 >
                   Sign in
+                </button>
+              </>
+            )}
+            {emailMode === "forgot" && (
+              <>
+                Remembered it?{" "}
+                <button
+                  type="button"
+                  className="fishbones-signin-switch__link"
+                  onClick={() => switchEmailMode("signIn")}
+                >
+                  Back to sign in
                 </button>
               </>
             )}

@@ -129,4 +129,26 @@ CREATE INDEX IF NOT EXISTS idx_courses_owner
     ON courses(owner_id);
 CREATE INDEX IF NOT EXISTS idx_courses_visibility
     ON courses(visibility, updated_at);
+
+-- Password-reset tokens. We store a hash of the random URL-safe token
+-- so a database leak doesn't yield live reset links — same posture as
+-- the `tokens` table. `expires_at` is a wall-clock string we compare
+-- via SQLite's `datetime('now')` so we don't need a clock skew check
+-- in Rust. ON DELETE CASCADE sweeps a user's open reset requests when
+-- the account is deleted.
+--
+-- `consumed_at` (NULL until consumed) lets us delete the row on use
+-- but keep an audit trail for a short window if we ever want one.
+-- For now we just hard-DELETE on consumption; the column is reserved
+-- in the schema so a future change doesn't need a migration.
+CREATE TABLE IF NOT EXISTS password_resets (
+    token_hash    TEXT PRIMARY KEY,
+    user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at    TEXT NOT NULL,
+    consumed_at   TEXT,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_password_resets_user
+    ON password_resets(user_id);
 "#;

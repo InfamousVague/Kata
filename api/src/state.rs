@@ -7,9 +7,19 @@
 //! Google-only) are a supported configuration.
 
 use crate::db::Database;
+use crate::mailer::Mailer;
 
 pub struct AppState {
     pub db: Database,
+    /// Transactional email sender. Always present; falls back to a
+    /// `tracing::warn!` log when Resend isn't configured so the
+    /// password-reset flow still works on a fresh / dev deploy
+    /// (admin reads the URL out of journalctl).
+    pub mailer: Mailer,
+    /// Web URL the password-reset email links to. Built from
+    /// `WEB_BASE_URL` (defaults to `https://fishbones.academy`). The
+    /// reset link shape is `<web_base_url>/reset-password?token=…`.
+    pub web_base_url: String,
 
     // ── Sign in with Apple ──────────────────────────────────────
     /// Apple Sign-In Service ID — used as the JWT audience claim
