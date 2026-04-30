@@ -454,6 +454,120 @@ pub fn import_course(app: tauri::AppHandle, archive_path: String) -> Result<Stri
     Ok(course_id)
 }
 
+/// Walk up from cwd + the running binary's dir looking for a folder
+/// that contains BOTH `package.json` and `public/starter-courses/`.
+/// That signature uniquely identifies the Fishbones repo root in dev
+/// (where the binary lives at `src-tauri/target/debug/`) without
+/// misfiring on someone else's checkout. Returns None when not found
+/// (production builds, foreign cwd) — callers turn that into a
+/// friendly error.
+fn find_repo_root_for_starter_promotion() -> Option<PathBuf> {
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    if let Ok(cwd) = std::env::current_dir() {
+        candidates.push(cwd);
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            candidates.push(dir.to_path_buf());
+        }
+    }
+    for start in candidates {
+        let mut cur: &Path = start.as_path();
+        loop {
+            if cur.join("package.json").is_file()
+                && cur.join("public").join("starter-courses").is_dir()
+            {
+                return Some(cur.to_path_buf());
+            }
+            match cur.parent() {
+                Some(p) => cur = p,
+                None => break,
+            }
+        }
+    }
+    None
+}
+
+/// Dev-only: write the supplied course JSON into
+/// `<repo>/public/starter-courses/<courseId>.json` so the next install
+/// picks up the in-app fixes. Refuses on release builds (the user is
+/// running an installed app, not a dev tree) and when the repo root
+/// can't be located.
+#[tauri::command]
+pub fn save_bundled_starter_course(course_id: String, body: CourseJson) -> Result<String, String> {
+    if !cfg!(debug_assertions) {
+        return Err(
+            "Promote-to-bundled is only available in `tauri dev` builds; this is a release binary."
+                .into(),
+        );
+    }
+    if course_id.is_empty()
+        || !course_id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        return Err("invalid course id (expected url-safe alphanumeric)".into());
+    }
+    let repo = find_repo_root_for_starter_promotion().ok_or_else(|| {
+        "Couldn't locate the Fishbones repo root from this binary — are you running via `npm run tauri:dev`?"
+            .to_string()
+    })?;
+    let dest = repo
+        .join("public")
+        .join("starter-courses")
+        .join(format!("{course_id}.json"));
+    let serialized = serde_json::to_vec_pretty(&body).map_err(|e| e.to_string())?;
+    if let Some(parent) = dest.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    fs::write(&dest, &serialized).map_err(|e| e.to_string())?;
+    Ok(dest.to_string_lossy().into_owned())
+}
+
+/// Fetch a remote `.fishbones` archive over HTTPS and install it into
+/// the user's courses dir. Used by the catalog's "Install" button on
+/// remote-tier placeholders. Returns the in-zip course id on success.
+#[tauri::command]
+pub async fn download_and_install_course(
+    app: tauri::AppHandle,
+    archive_url: String,
+) -> Result<String, String> {
+    if !archive_url.starts_with("https://") {
+        return Err(format!(
+            "archive URL must use HTTPS (got: {archive_url})"
+        ));
+    }
+    let dir = courses_dir(&app).map_err(|e| e.to_string())?;
+
+    // Fetch via reqwest (rustls already enabled in Cargo.toml).
+    let bytes = reqwest::get(&archive_url)
+        .await
+        .map_err(|e| format!("download failed: {e}"))?
+        .error_for_status()
+        .map_err(|e| format!("download failed: {e}"))?
+        .bytes()
+        .await
+        .map_err(|e| format!("download stream failed: {e}"))?;
+
+    // Stage to a temp file so unzip_to can read by path. We use a
+    // unique name per call so concurrent installs don't collide.
+    let tmp = std::env::temp_dir().join(format!(
+        "fishbones-install-{}.fishbones",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0)
+    ));
+    fs::write(&tmp, &bytes).map_err(|e| format!("write temp archive failed: {e}"))?;
+
+    let course_id = unzip_to(&tmp, &dir).map_err(|e| e.to_string())?;
+
+    // Best-effort cleanup of the temp file — the install succeeds
+    // either way.
+    let _ = fs::remove_file(&tmp);
+    Ok(course_id)
+}
+
 /// Counts returned to the UI after a manual sync. The frontend uses
 /// these to render a one-line status ("Synced 1 new course" / "Already
 /// up to date" / "Refreshed 12 packs") so the button gives the learner
