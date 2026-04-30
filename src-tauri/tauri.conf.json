@@ -32,7 +32,7 @@
     "deep-link": {
       "mobile": [],
       "desktop": {
-        "schemes": ["fishbones"]
+        "schemes": ["fishbones", "fishbones-dev"]
       }
     }
   },

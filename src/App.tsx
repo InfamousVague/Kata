@@ -67,6 +67,18 @@ import AiAssistant from "./components/AiAssistant/AiAssistant";
 import MobileApp from "./mobile/MobileApp";
 import { InstallBanner } from "./components/InstallBanner/InstallBanner";
 import CommandPalette from "./components/CommandPalette/CommandPalette";
+import { VerifyCourseOverlay, type VerifySessionView } from "./components/VerifyCourse";
+import FixApplierDialog from "./components/FixApplier/FixApplierDialog";
+import {
+  verifyCourse,
+  verifyAllCourses,
+  collectVerifyTargets,
+} from "./lib/verifyCourse";
+import { syncBundledToInstalled } from "./lib/courseSync";
+import {
+  emitEvent as emitVerifierEvent,
+  onCommand as onVerifierCommand,
+} from "./lib/verifierBus";
 import { runFiles, isPassing, type RunResult } from "./runtimes";
 import { useProgress } from "./hooks/useProgress";
 import { useFishbonesCloud } from "./hooks/useFishbonesCloud";
@@ -134,6 +146,33 @@ export default function App() {
 
   const [openTabs, setOpenTabs] = useState<OpenCourse[]>([]);
   const [activeTabIndex, setActiveTabIndex] = useState(0);
+
+  /// `cmd+K → "Verify this course"` session state. Null when no
+  /// verification is in flight or visible. The overlay component
+  /// renders this snapshot; mutation happens through `setVerifySession`
+  /// + `verifyControllerRef` in the handlers below. We separate the
+  /// AbortController from the snapshot so re-renders don't churn the
+  /// controller identity.
+  const [verifySession, setVerifySession] = useState<VerifySessionView | null>(
+    null,
+  );
+  const verifyControllerRef = useRef<AbortController | null>(null);
+
+  /// `cmd+K → "Apply fixes from prompt"` dialog open state. Null when
+  /// closed; otherwise the id of the course to pre-select in the
+  /// dropdown. App.tsx owns it so the dialog survives re-renders of
+  /// any inner view.
+  const [fixApplierForCourseId, setFixApplierForCourseId] = useState<
+    string | null
+  >(null);
+
+  /// Pre-picked PDF/EPUB path that the unified Add Course flow
+  /// passes into ImportDialog so the user doesn't have to re-pick
+  /// a file they just selected from the smart picker. Cleared on
+  /// dialog dismiss.
+  const [preselectedImportPath, setPreselectedImportPath] = useState<
+    string | null
+  >(null);
   const [importOpen, setImportOpen] = useState(false);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
   const [docsImportOpen, setDocsImportOpen] = useState(false);
@@ -200,7 +239,16 @@ export default function App() {
           const url = new URL(raw);
           // Defensive guard — the listener fires for any registered
           // scheme, and we only know how to handle our own.
-          if (url.protocol !== "fishbones:") continue;
+          //
+          // `fishbones-dev:` is the dev-build twin: macOS Launch
+          // Services routes a custom scheme to whichever `.app` bundle
+          // last registered it, and the installed prod app re-claims
+          // `fishbones://` on every launch. The dev binary uses the
+          // `-dev` variant so its OAuth callbacks don't get hijacked
+          // by the prod install. start_oauth (src-tauri/src/lib.rs)
+          // picks the matching `return_to` based on
+          // `cfg!(debug_assertions)`.
+          if (url.protocol !== "fishbones:" && url.protocol !== "fishbones-dev:") continue;
 
           // Route on the URL host (the segment after `fishbones://`):
           //   fishbones://oauth/done?status=ok&token=…   → cloud sign-in
@@ -352,6 +400,11 @@ export default function App() {
     const key = `${courseId}:${lessonId}`;
     if (!completed.has(key)) setCelebrateAt(Date.now());
     markCompleted(courseId, lessonId);
+    // Tell the watch-mode verifier (cmd+K → Verify course) that this
+    // lesson is now done. Fires for ALL completion paths — exercise
+    // pass, reading + Next, quiz all-correct — so the verifier loop
+    // can advance without caring which kind it just finished.
+    emitVerifierEvent({ type: "lessonComplete", courseId, lessonId });
   }
   // Stats use the UNFILTERED list so XP / streak / longest-streak stay
   // correct even when the learner racked up completions via drill kinds
@@ -1017,6 +1070,8 @@ export default function App() {
                 onDelete={deleteCourseFromLibrary}
                 onSettings={(id) => setCourseSettingsId(id)}
                 onBulkExport={isWeb ? undefined : bulkExportLibrary}
+                onUpdateCourse={handleReapplyBundledStarter}
+                onAddCourse={isWeb ? undefined : handleAddCourse}
               />
             </DeferredMount>
           ) : courses.length === 0 && coursesLoaded ? (
@@ -1086,6 +1141,8 @@ export default function App() {
                 onDelete={deleteCourseFromLibrary}
                 onSettings={(id) => setCourseSettingsId(id)}
                 onBulkExport={isWeb ? undefined : bulkExportLibrary}
+                onUpdateCourse={handleReapplyBundledStarter}
+                onAddCourse={isWeb ? undefined : handleAddCourse}
               />
             </DeferredMount>
           ) : activeLesson && activeCourse ? (
@@ -1255,7 +1312,11 @@ export default function App() {
 
       {importOpen && (
         <ImportDialog
-          onDismiss={() => setImportOpen(false)}
+          onDismiss={() => {
+            setImportOpen(false);
+            setPreselectedImportPath(null);
+          }}
+          preselectedPath={preselectedImportPath ?? undefined}
           onStartAiIngest={(opts) => {
             // Fire-and-forget — the pipeline runs detached and the floating
             // panel (below) shows progress. Dialog already closes itself.
@@ -1375,11 +1436,258 @@ export default function App() {
               }),
             );
           },
+          // "Verify" actions only surface when there's something to
+          // verify — an active course (single mode) or any loaded
+          // courses at all (multi mode). The palette itself is
+          // unaware of these conditions; we just gate the action by
+          // making it undefined when not applicable.
+          verifyCourse: activeCourse
+            ? () => startVerifySingleCourse(activeCourse)
+            : undefined,
+          verifyAllCourses:
+            courses.length > 0
+              ? () => startVerifyAllCourses(courses)
+              : undefined,
+          // Course-mutation actions: only surface when an active
+          // course is open so they have a clear target.
+          reapplyBundledStarter: activeCourse
+            ? () => void handleReapplyBundledStarter(activeCourse.id)
+            : undefined,
+          applyFixesFromPrompt: activeCourse
+            ? () => setFixApplierForCourseId(activeCourse.id)
+            : courses.length > 0
+              ? () => setFixApplierForCourseId(courses[0].id)
+              : undefined,
         }}
         onOpenLesson={(courseId, lessonId) => selectLesson(courseId, lessonId)}
       />
+
+      <VerifyCourseOverlay
+        session={verifySession}
+        onCancel={cancelVerification}
+        onClose={() => {
+          // If a run is still in flight when the user clicks ✕, treat
+          // it as cancel-and-close so we don't keep producing results
+          // into a stale, unrendered session object.
+          if (verifyControllerRef.current) cancelVerification();
+          setVerifySession(null);
+        }}
+      />
+
+      {fixApplierForCourseId && (
+        <FixApplierDialog
+          courses={courses}
+          initialCourseId={fixApplierForCourseId}
+          onClose={() => setFixApplierForCourseId(null)}
+          onApplied={async () => {
+            // Re-hydrate so the workbench picks up the patched
+            // solution / tests on next Run. We don't auto-close —
+            // the user might want to download the updated JSON to
+            // promote into the bundled starter.
+            if (fixApplierForCourseId) {
+              await hydrateCourse(fixApplierForCourseId);
+            }
+          }}
+        />
+      )}
     </div>
   );
+
+  /// Kick off `verifyCourse` for one course in WATCH mode — the
+  /// editor visibly flips to solution code, the run button visibly
+  /// fires, the next button visibly advances, quizzes auto-answer
+  /// with green-chip animation. By the end the course shows 100%
+  /// completion.
+  async function startVerifySingleCourse(course: Course) {
+    if (verifyControllerRef.current) return; // ignore re-entry
+    const controller = new AbortController();
+    verifyControllerRef.current = controller;
+    const total = collectVerifyTargets(course).length;
+    setVerifySession({
+      label: course.title,
+      index: 0,
+      total,
+      current: null,
+      results: [],
+      done: total === 0,
+    });
+    // Move to the first lesson immediately so the user sees the
+    // course open even before the loop's first iteration kicks in
+    // (the loop's own `selectLesson` is idempotent).
+    const first = course.chapters[0]?.lessons[0];
+    if (first) selectLesson(course.id, first.id);
+    try {
+      await verifyCourse(course, {
+        signal: controller.signal,
+        selectLesson,
+        markComplete: markCompletedAndCelebrate,
+        onProgress: (p) =>
+          setVerifySession((s) =>
+            s ? { ...s, index: p.index, total: p.total, current: p.current } : null,
+          ),
+        onResult: (r) =>
+          setVerifySession((s) =>
+            s ? { ...s, results: [...s.results, r] } : null,
+          ),
+      });
+    } finally {
+      verifyControllerRef.current = null;
+      setVerifySession((s) => (s ? { ...s, done: true, current: null } : null));
+    }
+  }
+
+  /// Same shape as the single-course path but loops every loaded
+  /// course. The label updates per course so the overlay header
+  /// reads "Mastering Ethereum (3 / 8)" while running.
+  async function startVerifyAllCourses(allCourses: Course[]) {
+    if (verifyControllerRef.current) return;
+    const controller = new AbortController();
+    verifyControllerRef.current = controller;
+    const grandTotal = allCourses.reduce(
+      (n, c) => n + collectVerifyTargets(c).length,
+      0,
+    );
+    let runningCount = 0;
+    setVerifySession({
+      label: `All courses (${allCourses.length})`,
+      index: 0,
+      total: grandTotal,
+      current: null,
+      results: [],
+      done: grandTotal === 0,
+    });
+    try {
+      await verifyAllCourses(allCourses, {
+        signal: controller.signal,
+        selectLesson,
+        markComplete: markCompletedAndCelebrate,
+        onProgress: (mp) => {
+          setVerifySession((s) =>
+            s
+              ? {
+                  ...s,
+                  label: mp.currentCourse
+                    ? `${mp.currentCourse.title} (${mp.courseIndex + 1} / ${mp.totalCourses})`
+                    : `All courses (${mp.totalCourses})`,
+                  index: runningCount + mp.perCourse.index,
+                  current: mp.perCourse.current,
+                }
+              : null,
+          );
+        },
+        onResult: (r) =>
+          setVerifySession((s) =>
+            s ? { ...s, results: [...s.results, r] } : null,
+          ),
+        onCourseComplete: (_course, results) => {
+          runningCount += results.length;
+        },
+      });
+    } finally {
+      verifyControllerRef.current = null;
+      setVerifySession((s) =>
+        s ? { ...s, done: true, current: null, index: s.total } : null,
+      );
+    }
+  }
+
+  function cancelVerification() {
+    verifyControllerRef.current?.abort();
+    verifyControllerRef.current = null;
+    setVerifySession((s) => (s ? { ...s, done: true, current: null } : null));
+  }
+
+  /// Unified "Add course" handler — replaces the four separate
+  /// import buttons (Book / Bulk books / Docs site / Archive) with
+  /// a single OS file picker that sniffs each chosen file and
+  /// dispatches to the right pipeline:
+  ///   * `.fishbones` / `.kata` / `.zip` → `importArchiveAtPath`
+  ///   * `.pdf` / `.epub` (single)       → ImportDialog with
+  ///                                       `preselectedPath`
+  ///   * `.pdf` / `.epub` (multi)        → BulkImportDialog (no
+  ///                                       pre-fill in v1; user
+  ///                                       re-picks inside)
+  /// Docs URLs are URL-only so they stay as a separate dropdown
+  /// item on AddCourseButton.
+  async function handleAddCourse() {
+    try {
+      const picked = await openDialog({
+        multiple: true,
+        filters: [
+          {
+            name: "Course files",
+            extensions: ["pdf", "epub", "fishbones", "kata", "zip"],
+          },
+        ],
+      });
+      if (!picked) return;
+      const paths: string[] = Array.isArray(picked) ? picked : [picked];
+      const pdfs: string[] = [];
+      const archives: string[] = [];
+      for (const p of paths) {
+        const ext = p.toLowerCase().split(".").pop() ?? "";
+        if (ext === "pdf" || ext === "epub") pdfs.push(p);
+        else if (ext === "fishbones" || ext === "kata" || ext === "zip")
+          archives.push(p);
+      }
+
+      // Archives import directly via the existing Tauri command —
+      // no dialog hop needed. Fire each in sequence; alert ONLY at
+      // the end so a user dropping 5 archives doesn't get 5 popups
+      // mid-batch.
+      const archiveErrors: string[] = [];
+      for (const archive of archives) {
+        try {
+          await importArchiveAtPath(archive);
+        } catch (e) {
+          archiveErrors.push(
+            `${archive}: ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
+      }
+      if (archiveErrors.length > 0) {
+        alert(
+          `Some archives failed to import:\n\n${archiveErrors.join("\n")}`,
+        );
+      }
+
+      if (pdfs.length === 1) {
+        // Single PDF/EPUB → open the existing import wizard with
+        // the path pre-filled so the user lands on the metadata
+        // step immediately instead of re-picking.
+        setPreselectedImportPath(pdfs[0]);
+        setImportOpen(true);
+      } else if (pdfs.length > 1) {
+        // Multi PDF/EPUB → bulk import wizard. v1 doesn't pre-fill
+        // the queue; user re-selects inside. Acceptable trade-off
+        // because bulk runs are rarer than single imports.
+        setBulkImportOpen(true);
+      }
+    } catch (e) {
+      console.error("[fishbones] add course failed:", e);
+      alert(
+        `Couldn't open the file picker: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+  }
+
+  /// "Reapply bundled starter" — overwrite the installed copy of a
+  /// course with the bundled `public/starter-courses/<id>.json`,
+  /// then refresh the in-memory course list so the active tab
+  /// picks up the new content. Used from cmd+K AND from the
+  /// Library cover badge.
+  async function handleReapplyBundledStarter(courseId: string) {
+    try {
+      await syncBundledToInstalled(courseId);
+      // Re-pull the summary list + re-hydrate this course's body
+      // so the running app reflects the new content without a
+      // page reload.
+      await refreshCourses();
+      await hydrateCourse(courseId);
+    } catch (e) {
+      console.error("[fishbones] reapply bundled starter failed:", e);
+    }
+  }
 }
 
 interface Neighbors {
@@ -1575,10 +1883,17 @@ function LessonView({
       // switch, an untyped IPC failure). Surface a friendly error
       // rather than crashing the handler with `r.error` on undefined.
       if (!r) {
-        setResult({
+        const errResult: RunResult = {
           logs: [],
           error: `No runtime for language "${effectiveLanguage}".`,
           durationMs: 0,
+        };
+        setResult(errResult);
+        emitVerifierEvent({
+          type: "runResult",
+          lessonId: lesson.id,
+          passed: false,
+          result: errResult,
         });
         if (useFloatingPhone) {
           phoneBus?.emit({
@@ -1590,7 +1905,17 @@ function LessonView({
         return;
       }
       setResult(r);
-      if (isPassing(r)) onComplete();
+      const passed = isPassing(r);
+      if (passed) onComplete();
+      // Watch-mode verifier: announce the run finished + whether it
+      // passed so the verify-course coroutine can advance to the
+      // next lesson without polling React state.
+      emitVerifierEvent({
+        type: "runResult",
+        lessonId: lesson.id,
+        passed,
+        result: r,
+      });
       // Push the run outcome to the popped phone simulator. Preview
       // URL when present (RN runtime hands one back from the local
       // Tauri preview server); otherwise the captured logs + error
@@ -1612,10 +1937,17 @@ function LessonView({
       // lands here. Render it in the OutputPane so the user sees what
       // went wrong instead of a silent failed run.
       const errMsg = e instanceof Error ? (e.stack ?? e.message) : String(e);
-      setResult({
+      const errResult: RunResult = {
         logs: [],
         error: errMsg,
         durationMs: 0,
+      };
+      setResult(errResult);
+      emitVerifierEvent({
+        type: "runResult",
+        lessonId: lesson.id,
+        passed: false,
+        result: errResult,
       });
       if (useFloatingPhone) {
         phoneBus?.emit({ type: "console", logs: [], error: errMsg });
@@ -1741,6 +2073,53 @@ function LessonView({
   function handlePrev() {
     if (neighbors.prev) onNavigate(neighbors.prev.id);
   }
+
+  /// Watch-mode verifier wiring. The verifier coroutine (cmd+K →
+  /// Verify course) emits commands targeting a specific lesson id;
+  /// this LessonView listens and dispatches them to the same
+  /// handlers the buttons use, so the editor visibly flips to
+  /// solution code, the run button visibly fires, etc.
+  ///
+  /// We capture the latest handlers via a ref so the listener stays
+  /// registered across re-renders without re-binding the window
+  /// event each time the closure changes.
+  const verifierHandlersRef = useRef({
+    handleRevealSolution,
+    handleRun,
+    handleNext,
+  });
+  useEffect(() => {
+    verifierHandlersRef.current = {
+      handleRevealSolution,
+      handleRun,
+      handleNext,
+    };
+  });
+  useEffect(() => {
+    const off = onVerifierCommand((cmd) => {
+      if (cmd.lessonId !== lesson.id) return;
+      if (cmd.type === "revealSolution")
+        verifierHandlersRef.current.handleRevealSolution();
+      else if (cmd.type === "run")
+        void verifierHandlersRef.current.handleRun();
+      else if (cmd.type === "next")
+        verifierHandlersRef.current.handleNext();
+    });
+    return off;
+  }, [lesson.id]);
+
+  /// Announce the lesson view is mounted + ready to receive
+  /// commands. Fires once per lesson change. The verifier coroutine
+  /// awaits this event before dispatching any per-lesson commands so
+  /// it doesn't race the previous LessonView's unmount.
+  useEffect(() => {
+    emitVerifierEvent({
+      type: "lessonReady",
+      courseId,
+      lessonId: lesson.id,
+      kind: lesson.kind,
+    });
+  }, [courseId, lesson.id, lesson.kind]);
 
   const nextLabel =
     isReadingOnly && !isCompleted && neighbors.next ? "mark read & next" : "next";

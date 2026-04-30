@@ -165,7 +165,16 @@ fn build_return_url(
     // attacker who got the user to click a malicious link with
     // `return_to=https://attacker.com/log?fishbones_token=` would
     // otherwise leak the bearer.
+    // `fishbones-dev://` is the desktop dev-build twin of `fishbones://`.
+    // macOS Launch Services routes each custom scheme to whichever
+    // `.app` bundle most recently registered it, and the installed
+    // prod app re-claims `fishbones://` on every launch — meaning a
+    // `tauri dev` session's OAuth callback gets hijacked by the prod
+    // install. Splitting the scheme keeps dev callbacks landing in
+    // the dev binary. The desktop config registers both schemes so
+    // each build's Launch Services entry covers its own variant.
     let safe_base = if base.starts_with("fishbones://")
+        || base.starts_with("fishbones-dev://")
         || base.starts_with("kata://")
         || WEB_RETURN_ALLOWLIST.iter().any(|allowed| base == *allowed)
     {
