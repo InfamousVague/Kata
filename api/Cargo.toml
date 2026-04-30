@@ -39,6 +39,15 @@ jsonwebtoken = "9"
 # without needing system OpenSSL.
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
+# SMTP client for the self-hosted mail path. `tokio1-rustls-tls`
+# keeps the dep tree native-TLS-free (matches reqwest's rustls
+# choice). `builder` gives us the typed Message constructor;
+# `smtp-transport` is the outbound transport. We hand off to a local
+# Postfix on most prod deploys (port 25, plaintext over loopback)
+# but the same path works against an external SMTP service over
+# STARTTLS:587 if the user prefers that.
+lettre = { version = "0.11", default-features = false, features = ["builder", "smtp-transport", "tokio1-rustls-tls"] }
+
 # URL building (auth start endpoints + the deep-link return URL).
 url = "2"
 

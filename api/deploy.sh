@@ -125,6 +125,7 @@ PUBLIC_URL=${PUBLIC_URL:-}
 DATABASE_PATH=/var/lib/fishbones-api/api.sqlite
 HOST=127.0.0.1
 PORT=${API_PORT:-9443}
+WEB_BASE_URL=${WEB_BASE_URL:-https://fishbones.academy}
 
 APPLE_CLIENT_ID=${APPLE_CLIENT_ID:-}
 APPLE_TEAM_ID=${APPLE_TEAM_ID:-}
@@ -134,6 +135,35 @@ APPLE_DOMAIN_ASSOCIATION_FILE=/etc/fishbones-api/apple-domain-association.txt
 
 GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
 GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+
+# ── Mail backend ─────────────────────────────────────────────
+# Two backends, tried in order: SMTP first, then Resend, then a
+# tracing::warn fallback that prints the URL so it's recoverable
+# from journalctl. Configure the one(s) you want; leave the rest
+# blank to disable.
+#
+# SMTP (self-hosted Postfix on this VPS — see api/setup-mail.sh):
+#   SMTP_HOST=localhost
+#   SMTP_PORT=25
+#   SMTP_STARTTLS=false
+#   SMTP_FROM=noreply@fishbones.academy
+#   SMTP_FROM_NAME=Fishbones
+# SMTP (external relay like Mailgun / SES):
+#   SMTP_HOST=smtp.mailgun.org SMTP_PORT=587 SMTP_STARTTLS=true
+#   SMTP_USER=postmaster@... SMTP_PASS=...
+SMTP_HOST=${SMTP_HOST:-}
+SMTP_PORT=${SMTP_PORT:-}
+SMTP_USER=${SMTP_USER:-}
+SMTP_PASS=${SMTP_PASS:-}
+SMTP_FROM=${SMTP_FROM:-}
+SMTP_FROM_NAME=${SMTP_FROM_NAME:-}
+SMTP_STARTTLS=${SMTP_STARTTLS:-true}
+
+# Resend HTTP API — fallback / alternative to SMTP. Free tier
+# covers 100 emails/day. See https://resend.com.
+RESEND_API_KEY=${RESEND_API_KEY:-}
+RESEND_FROM=${RESEND_FROM:-}
+RESEND_FROM_NAME=${RESEND_FROM_NAME:-}
 EOF
 
 # ── systemd unit ──────────────────────────────────────────────────

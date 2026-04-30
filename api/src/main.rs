@@ -74,25 +74,45 @@ async fn main() -> anyhow::Result<()> {
     let public_url = read_env("PUBLIC_URL");
     let apple_domain_association_file = read_env("APPLE_DOMAIN_ASSOCIATION_FILE");
 
-    // ── Mailer (Resend) ─────────────────────────────────────────
-    // Optional. When unset we still construct a Mailer; sends fall
-    // through to a `tracing::warn!` so the password-reset URL is
-    // recoverable from `journalctl -u fishbones-api`.
+    // ── Mailer (SMTP + Resend, log fallback) ────────────────────
+    // Both backends are optional and tried in order: SMTP first
+    // (self-hosted Postfix or any third-party submission server),
+    // then Resend, then a `tracing::warn!` fallback that prints the
+    // body so the URL is recoverable from `journalctl -u fishbones-api`.
+    // See api/src/mailer.rs for the full backend-selection logic.
+    let smtp_host = read_env("SMTP_HOST");
+    let smtp_port = read_env("SMTP_PORT").and_then(|s| s.parse::<u16>().ok());
+    let smtp_user = read_env("SMTP_USER");
+    let smtp_pass = read_env("SMTP_PASS");
+    let smtp_from = read_env("SMTP_FROM");
+    let smtp_from_name = read_env("SMTP_FROM_NAME");
+    // STARTTLS defaults to true (sane for any external relay). Set
+    // SMTP_STARTTLS=false for `localhost:25` plaintext talking to a
+    // colocated Postfix — the wire never leaves loopback.
+    let smtp_starttls = read_env("SMTP_STARTTLS")
+        .map(|v| !matches!(v.to_lowercase().as_str(), "false" | "0" | "no"))
+        .unwrap_or(true);
     let resend_api_key = read_env("RESEND_API_KEY");
     let resend_from = read_env("RESEND_FROM");
     let resend_from_name = read_env("RESEND_FROM_NAME");
     let mailer = crate::mailer::Mailer::from_env(
+        smtp_host,
+        smtp_port,
+        smtp_user,
+        smtp_pass,
+        smtp_from,
+        smtp_from_name,
+        smtp_starttls,
         resend_api_key,
         resend_from,
         resend_from_name,
     );
-    if mailer.is_resend_configured() {
-        tracing::info!("Mailer: Resend configured");
-    } else {
-        tracing::info!(
-            "Mailer: Resend not configured — password-reset URLs will be logged via tracing instead. Set RESEND_API_KEY + RESEND_FROM to enable email delivery."
-        );
-    }
+    tracing::info!(
+        "Mailer: active backend = {} (smtp_configured={}, resend_configured={})",
+        mailer.describe_active_backend(),
+        mailer.is_smtp_configured(),
+        mailer.is_resend_configured(),
+    );
     // Where the password-reset email's link points. Defaults to the
     // public marketing site since that's where /reset-password lives.
     let web_base_url = read_env("WEB_BASE_URL")
