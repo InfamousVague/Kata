@@ -65,10 +65,20 @@ async function runNative(
 
   let tests: TestResult[] | undefined = undefined;
   if (isLessonRun) {
-    // Parse KATA_TEST::name::PASS / FAIL lines. Non-empty testCode
-    // packs (C/C++/Java/Kotlin/C#) emit them; empty-testCode packs
-    // (assembly, swift) leave stdout clean and we synthesize below.
+    // Parse KATA_TEST::name::PASS / FAIL lines from BOTH streams.
+    // Most languages emit on stdout (puts/println/printf), but Zig's
+    // synthesized harness uses `std.debug.print` which writes to
+    // stderr because Zig 0.16 removed `std.io.getStdOut()` and the
+    // newer `std.fs.File.stdout()` writer pattern is verbose enough
+    // that going through `std.debug.print` is materially simpler.
+    // Scanning both streams is harmless for the other languages —
+    // their stderr never carries KATA_TEST lines, so the parser
+    // returns an empty list from that side and we get the same
+    // behaviour as before.
     tests = parseKataTests(raw.stdout);
+    if (tests.length === 0) {
+      tests = parseKataTests(raw.stderr);
+    }
     if (tests.length === 0) {
       // Run-only convention: lesson with empty tests passes iff the
       // program exited cleanly. Synthesize a single result so (a) the
@@ -88,28 +98,30 @@ async function runNative(
     }
   }
 
-  // Strip KATA_TEST lines from the visible log stream so the user
-  // sees only their own prints, not the test protocol.
+  // Strip KATA_TEST lines from BOTH visible streams so the user sees
+  // only their own prints, not the test protocol. (Zig pumps the
+  // protocol on stderr — see the comment above — so we have to filter
+  // there too or the learner sees the whole KATA_TEST::name::PASS
+  // ledger in their warnings panel.)
+  const stripKata = (s: string) =>
+    s.split("\n").filter((l) => !/^KATA_TEST::/.test(l)).join("\n").replace(/\n+$/, "");
   const displayStdout = isLessonRun
-    ? raw.stdout
-        .split("\n")
-        .filter((l) => !/^KATA_TEST::/.test(l))
-        .join("\n")
-        .replace(/\n+$/, "")
+    ? stripKata(raw.stdout)
     : raw.stdout.replace(/\n+$/, "");
+  const displayStderr = isLessonRun ? stripKata(raw.stderr) : raw.stderr;
 
   const logs: LogLine[] = [];
   if (displayStdout) logs.push({ level: "log", text: displayStdout });
-  if (raw.stderr && !raw.success) {
+  if (displayStderr && !raw.success) {
     // Non-zero exit usually means a compile-time or runtime error on
     // stderr — fold it into the log stream as an "error" so it renders
     // in the red tint in OutputPane.
-    logs.push({ level: "error", text: raw.stderr.trimEnd() });
-  } else if (raw.stderr) {
+    logs.push({ level: "error", text: displayStderr.trimEnd() });
+  } else if (displayStderr) {
     // Warnings or informational notes — compiler may emit these on a
     // successful build (e.g. `-Wall` diagnostics on clean C). Render
     // as warn so they're visible but don't scream failure.
-    logs.push({ level: "warn", text: raw.stderr.trimEnd() });
+    logs.push({ level: "warn", text: displayStderr.trimEnd() });
   }
 
   // When we have any captured output (stderr, stdout) the user gets the
@@ -207,5 +219,32 @@ export function runDart(code: string, testCode?: string): Promise<RunResult> {
 }
 
 export function runZig(code: string, testCode?: string): Promise<RunResult> {
-  return runNative("run_zig", code, "zig", "zig", testCode);
+  // Zig has a very strict "no duplicate top-level names" rule. The default
+  // KATA_TEST harness for our Zig packs starts test code with
+  // `const std = @import("std");` so that references like
+  // `std.mem.eql` resolve. The user's solution / starter usually ALSO
+  // declares `const std = @import("std");` at the top. When `runNative`
+  // concatenates them, Zig fails with:
+  //
+  //   error: duplicate struct member name 'std'
+  //
+  // …pointing at the second declaration. Strip the redundant import
+  // from the test code if the user's code already has one. The test
+  // code's `std.foo` references still resolve to the user's import
+  // because they share the same file scope after concatenation.
+  return runNative("run_zig", code, "zig", "zig", dedupeZigStdImport(code, testCode));
+}
+
+/// Drop a leading `const std = @import("std");` from `testCode` when
+/// the user's `code` already declares it. This is a Zig-specific
+/// hazard — most other languages let you re-import a module without
+/// erroring (Rust hides duplicates behind module scopes, Go forbids
+/// imports outside the import block so the merger never has to look).
+/// Keeping the helper here (rather than in runNative) means
+/// non-Zig languages keep their straight-through merge.
+function dedupeZigStdImport(code: string, testCode?: string): string | undefined {
+  if (testCode == null) return testCode;
+  const importRe = /^[ \t]*const\s+std\s*=\s*@import\(\s*"std"\s*\)\s*;[ \t]*\r?\n?/m;
+  if (!importRe.test(code)) return testCode; // user didn't import; harness import is fine
+  return testCode.replace(importRe, "");
 }
