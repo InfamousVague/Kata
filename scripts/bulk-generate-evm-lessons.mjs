@@ -40,40 +40,161 @@ const COURSES_DIR = join(APP_SUPPORT, "courses");
 
 const COURSE_ID = process.env.COURSE_ID ?? "mastering-ethereum";
 const COUNT = Number(process.env.COUNT ?? 20);
+const START = Number(process.env.START ?? 0);
 const DRY_RUN = !!process.env.DRY_RUN;
 const MODEL = process.env.MODEL ?? "claude-sonnet-4-5";
 const CONCURRENCY = Math.max(1, Number(process.env.CONCURRENCY ?? 4));
 
 /// Topic + difficulty buckets the LLM rotates through. Each entry is
-/// (chapter id, topic, difficulty). We bias toward MEDIUM since
-/// realistic deploy+call exercises rarely fit in the easy 5-10 line
-/// budget — the simplest "compile + read storage" already takes ~15.
+/// (chapter id, topic, difficulty). All EVM-harness lessons land in
+/// the existing ch04-smart-contracts-evm chapter (the runtime + the
+/// linear flow keep both sides happy — chapter 4 IS smart contracts +
+/// EVM in the book, so an extra ~120 exercises there fits the
+/// curriculum). We bias toward MEDIUM/HARD since the easy slots only
+/// cover ~25 distinct beginner concepts; the depth of the pack lives
+/// in medium and hard.
 const PLAN = [
-  // ── Easy: single contract, one piece of state ───────────────
-  ["ch04-evm", "storage variables", "easy"],
-  ["ch04-evm", "view + pure functions", "easy"],
-  ["ch04-evm", "constructor with args", "easy"],
-  ["ch04-evm", "modifiers", "easy"],
-  ["ch04-evm", "events (single emit)", "easy"],
-  ["ch07-contracts", "increment counter", "easy"],
-  ["ch07-contracts", "boolean toggle", "easy"],
+  // ── Easy (25): single contract, one or two pieces of state ──
+  ["ch04-smart-contracts-evm", "storage uint256 read+write", "easy"],
+  ["ch04-smart-contracts-evm", "storage address with setter", "easy"],
+  ["ch04-smart-contracts-evm", "storage bool flag with toggle", "easy"],
+  ["ch04-smart-contracts-evm", "storage bytes32 commitment", "easy"],
+  ["ch04-smart-contracts-evm", "storage string label", "easy"],
+  ["ch04-smart-contracts-evm", "constructor sets owner from msg.sender", "easy"],
+  ["ch04-smart-contracts-evm", "constructor with two args (name, symbol)", "easy"],
+  ["ch04-smart-contracts-evm", "external view returning two values", "easy"],
+  ["ch04-smart-contracts-evm", "pure function for math (square, cube)", "easy"],
+  ["ch04-smart-contracts-evm", "modifier: onlyOwner", "easy"],
+  ["ch04-smart-contracts-evm", "modifier: notZeroAddress", "easy"],
+  ["ch04-smart-contracts-evm", "modifier: notPaused (with bool flag)", "easy"],
+  ["ch04-smart-contracts-evm", "single event emit on state change", "easy"],
+  ["ch04-smart-contracts-evm", "indexed event args (transfer-shape)", "easy"],
+  ["ch04-smart-contracts-evm", "require with custom message", "easy"],
+  ["ch04-smart-contracts-evm", "msg.sender + msg.value introspection", "easy"],
+  ["ch04-smart-contracts-evm", "block.timestamp guard", "easy"],
+  ["ch04-smart-contracts-evm", "block.number sanity", "easy"],
+  ["ch04-smart-contracts-evm", "increment + decrement with underflow guard", "easy"],
+  ["ch04-smart-contracts-evm", "simple add/subtract calculator", "easy"],
+  ["ch04-smart-contracts-evm", "owner-renounce (set to zero address)", "easy"],
+  ["ch04-smart-contracts-evm", "fallback function emits event", "easy"],
+  ["ch04-smart-contracts-evm", "receive function logs deposit", "easy"],
+  ["ch04-smart-contracts-evm", "address(this).balance read", "easy"],
+  ["ch04-smart-contracts-evm", "constant + immutable variables", "easy"],
 
-  // ── Medium: multi-function contracts, simple invariants ────
-  ["ch07-contracts", "owner-only access control", "medium"],
-  ["ch07-contracts", "ETH deposit + withdraw (payable)", "medium"],
-  ["ch07-contracts", "ERC-20-style balances mapping", "medium"],
-  ["ch07-contracts", "events with indexed args", "medium"],
-  ["ch07-contracts", "custom errors with revert payloads", "medium"],
-  ["ch04-evm", "checks-effects-interactions pattern", "medium"],
-  ["ch07-contracts", "time-locked withdrawal (block.timestamp)", "medium"],
-  ["ch07-contracts", "fixed-supply token transfers", "medium"],
-  ["ch07-contracts", "two-of-three multi-sig approve flow", "medium"],
+  // ── Medium (40): multi-function, mappings, modifiers, events ──
+  ["ch04-smart-contracts-evm", "mapping(address => uint256) balance ledger", "medium"],
+  ["ch04-smart-contracts-evm", "nested mapping (allowance: address => address => uint)", "medium"],
+  ["ch04-smart-contracts-evm", "dynamic array push/pop with bounds", "medium"],
+  ["ch04-smart-contracts-evm", "fixed-size array of recent depositors", "medium"],
+  ["ch04-smart-contracts-evm", "struct array (tasks list with status)", "medium"],
+  ["ch04-smart-contracts-evm", "mapping of structs (user profiles)", "medium"],
+  ["ch04-smart-contracts-evm", "enum-driven state machine (Pending/Active/Closed)", "medium"],
+  ["ch04-smart-contracts-evm", "modifier with parameter (minStake)", "medium"],
+  ["ch04-smart-contracts-evm", "two-contract inheritance (Owned + Pausable)", "medium"],
+  ["ch04-smart-contracts-evm", "interface + implementation (IFoo)", "medium"],
+  ["ch04-smart-contracts-evm", "abstract base contract with hook", "medium"],
+  ["ch04-smart-contracts-evm", "function overloading (deposit() vs deposit(uint))", "medium"],
+  ["ch04-smart-contracts-evm", "virtual + override across two contracts", "medium"],
+  ["ch04-smart-contracts-evm", "event with three indexed args + decoded via getLogs", "medium"],
+  ["ch04-smart-contracts-evm", "custom error with named field payload", "medium"],
+  ["ch04-smart-contracts-evm", "payable function gates on minimum value", "medium"],
+  ["ch04-smart-contracts-evm", "withdraw pattern with pull model", "medium"],
+  ["ch04-smart-contracts-evm", "transfer ETH to externally-supplied address", "medium"],
+  ["ch04-smart-contracts-evm", "low-level call returning success bool", "medium"],
+  ["ch04-smart-contracts-evm", "ERC-20 mint + transfer + balanceOf", "medium"],
+  ["ch04-smart-contracts-evm", "ERC-20 approve + transferFrom flow", "medium"],
+  ["ch04-smart-contracts-evm", "ERC-20 burn from caller", "medium"],
+  ["ch04-smart-contracts-evm", "ERC-721 mint + ownerOf + transferFrom", "medium"],
+  ["ch04-smart-contracts-evm", "ERC-721 approve + getApproved", "medium"],
+  ["ch04-smart-contracts-evm", "timelock release after block.timestamp", "medium"],
+  ["ch04-smart-contracts-evm", "two-step ownership transfer (claim pattern)", "medium"],
+  ["ch04-smart-contracts-evm", "pausable contract with admin flip", "medium"],
+  ["ch04-smart-contracts-evm", "checks-effects-interactions full demo", "medium"],
+  ["ch04-smart-contracts-evm", "negative ints (int256) accounting", "medium"],
+  ["ch04-smart-contracts-evm", "abi.encode + abi.decode round-trip", "medium"],
+  ["ch04-smart-contracts-evm", "abi.encodePacked vs abi.encode hash difference", "medium"],
+  ["ch04-smart-contracts-evm", "keccak256 of packed args matches off-chain", "medium"],
+  ["ch04-smart-contracts-evm", "ecrecover signature verification", "medium"],
+  ["ch04-smart-contracts-evm", "EIP-712 typed data hash builder", "medium"],
+  ["ch04-smart-contracts-evm", "split contract into two and call across", "medium"],
+  ["ch04-smart-contracts-evm", "event-driven counter (no return, just event)", "medium"],
+  ["ch04-smart-contracts-evm", "ETH deposit + per-user withdraw with mapping", "medium"],
+  ["ch04-smart-contracts-evm", "votable proposal: yes/no tally", "medium"],
+  ["ch04-smart-contracts-evm", "subscription with monthly window", "medium"],
+  ["ch04-smart-contracts-evm", "tip jar with leaderboard top-N tracking", "medium"],
 
-  // ── Hard: cross-contract, edge cases, gas / signing ─────────
-  ["ch07-contracts", "factory deploys child contract via new", "hard"],
-  ["ch07-contracts", "auction with refund on outbid", "hard"],
-  ["ch07-contracts", "vesting cliff + linear unlock over time", "hard"],
-  ["ch07-contracts", "reentrancy guard with mutex", "hard"],
+  // ── Hard (25): proxies, gas, advanced patterns ──────────────
+  ["ch04-smart-contracts-evm", "factory with create2 deterministic addresses", "hard"],
+  ["ch04-smart-contracts-evm", "minimal proxy clone (EIP-1167)", "hard"],
+  ["ch04-smart-contracts-evm", "transparent proxy with admin slot", "hard"],
+  ["ch04-smart-contracts-evm", "UUPS upgrade with self-authorising upgrade fn", "hard"],
+  ["ch04-smart-contracts-evm", "EIP-712 permit (off-chain sig, on-chain consume)", "hard"],
+  ["ch04-smart-contracts-evm", "ERC-20 with EIP-2612 permit", "hard"],
+  ["ch04-smart-contracts-evm", "n-of-m multisig wallet", "hard"],
+  ["ch04-smart-contracts-evm", "constant-product AMM: add/remove liquidity", "hard"],
+  ["ch04-smart-contracts-evm", "AMM swap with price impact", "hard"],
+  ["ch04-smart-contracts-evm", "flash loan callback round-trip", "hard"],
+  ["ch04-smart-contracts-evm", "vesting cliff + linear unlock with claim()", "hard"],
+  ["ch04-smart-contracts-evm", "DAO proposal lifecycle (propose, vote, execute)", "hard"],
+  ["ch04-smart-contracts-evm", "English auction with bidder refunds", "hard"],
+  ["ch04-smart-contracts-evm", "Dutch auction (decreasing price over time)", "hard"],
+  ["ch04-smart-contracts-evm", "commit-reveal scheme for fair lottery", "hard"],
+  ["ch04-smart-contracts-evm", "merkle airdrop with proof verification", "hard"],
+  ["ch04-smart-contracts-evm", "gas-efficient packed storage (3 fields in 1 slot)", "hard"],
+  ["ch04-smart-contracts-evm", "assembly add with overflow check", "hard"],
+  ["ch04-smart-contracts-evm", "inline assembly: read storage slot directly", "hard"],
+  ["ch04-smart-contracts-evm", "delegatecall library for shared storage layout", "hard"],
+  ["ch04-smart-contracts-evm", "reentrancy guard with mutex (cross-function)", "hard"],
+  ["ch04-smart-contracts-evm", "CREATE2 + constructor immutable args", "hard"],
+  ["ch04-smart-contracts-evm", "ERC-1155 batch-balance + batch-transfer", "hard"],
+  ["ch04-smart-contracts-evm", "minimal ERC-4626 vault: deposit + redeem", "hard"],
+  ["ch04-smart-contracts-evm", "mini governor: queue → delay → execute", "hard"],
+
+  // ── Gap fills (post-curriculum-audit, 2026-05) ────────────────
+  // Each entry targets a chapter the audit identified as
+  // under-covered. All Solidity-harness exercises so they reuse the
+  // existing chain.* harness; non-Solidity gaps (BIP-39, JSON-RPC,
+  // ZK, scaling) are deferred to a separate non-EVM generator.
+
+  // ch08-vyper — Vyper covers Solidity-equivalents; keeps the
+  // "harness: evm" routing because the runtime compiles via Pyodide
+  // and re-uses the same VM.
+  ["ch08-smart-contracts-and-vyper", "vyper storage counter (port of Solidity)", "easy"],
+  ["ch08-smart-contracts-and-vyper", "vyper onlyowner via @external + msg.sender check", "easy"],
+  ["ch08-smart-contracts-and-vyper", "vyper bounded loops (no recursion)", "medium"],
+  ["ch08-smart-contracts-and-vyper", "vyper ERC-20 minimal port", "medium"],
+  ["ch08-smart-contracts-and-vyper", "vyper events with indexed args", "easy"],
+
+  // ch09-security — three more security patterns the audit called out
+  ["ch09-smart-contract-security", "tx.origin vs msg.sender (phishing trap fix)", "medium"],
+  ["ch09-smart-contract-security", "front-running mitigation via commit-reveal", "hard"],
+  ["ch09-smart-contract-security", "block.timestamp randomness pitfall demo", "medium"],
+  ["ch09-smart-contract-security", "DoS via unbounded loop (gas-grief fix)", "medium"],
+  ["ch09-smart-contract-security", "integer overflow check (pre-0.8 SafeMath replay)", "medium"],
+
+  // ch11-oracles — most chapters need 4-5 lessons; this one's at 1
+  ["ch11-oracles", "Chainlink-style price feed aggregator (mock)", "medium"],
+  ["ch11-oracles", "request-response oracle with callback", "hard"],
+  ["ch11-oracles", "median-aggregate three feeds", "medium"],
+  ["ch11-oracles", "stale-price rejection by timestamp", "medium"],
+  ["ch11-oracles", "mock VRF (verifiable randomness) consumer", "hard"],
+
+  // ch12-dapps — governance/multisig done; add ENS + DApp glue
+  ["ch12-decentralized-applications", "ENS namehash derivation (Solidity-side)", "medium"],
+  ["ch12-decentralized-applications", "ENS resolver lookup against mock registry", "medium"],
+  ["ch12-decentralized-applications", "viem-style read against deployed contract using chain.transport", "easy"],
+  ["ch12-decentralized-applications", "viem-style write via walletClient against chain.transport", "medium"],
+  ["ch12-decentralized-applications", "tic-tac-toe game contract with two players", "hard"],
+
+  // ch13-defi — currently 6, target 8
+  ["ch13-decentralized-finance", "lending market: deposit, borrow, accrue interest", "hard"],
+  ["ch13-decentralized-finance", "stablecoin overcollateralized mint + redeem", "hard"],
+  ["ch13-decentralized-finance", "merkle airdrop with claim flow", "medium"],
+
+  // ch14-evm — bytecode-level lessons, currently 9
+  ["ch14-the-evm", "yul function: add with overflow guard", "hard"],
+  ["ch14-the-evm", "function selector decoder (msg.sig)", "medium"],
+  ["ch14-the-evm", "extcodesize check for contract vs EOA", "medium"],
 ];
 
 const SUPPORTED_DIFFICULTIES = new Set(["easy", "medium", "hard"]);
@@ -306,13 +427,13 @@ async function main() {
   console.log(`[evm-gen] model: ${MODEL}, concurrency: ${CONCURRENCY}`);
   console.log(`[evm-gen] PLAN size: ${PLAN.length}, COUNT: ${COUNT}`);
 
-  const slots = PLAN.slice(0, COUNT)
+  const slots = PLAN.slice(START, START + COUNT)
     .filter(([, , d]) => SUPPORTED_DIFFICULTIES.has(d))
     .map(([chapterId, topic, difficulty], i) => ({
       chapterId,
       topic,
       difficulty,
-      index: i,
+      index: START + i,
     }));
 
   const existingIds = new Set(
@@ -370,9 +491,17 @@ async function main() {
         hints: parsed.hints || [],
       };
       // Map chapter ids to display titles when creating new chapters.
+      // Mirrors the 17-chapter book layout used by
+      // scripts/restructure-mastering-ethereum.mjs.
       const chapterTitles = {
-        "ch04-evm": "The EVM",
+        "ch04-smart-contracts-evm": "Smart Contracts and the EVM",
         "ch07-contracts": "Smart Contracts",
+        "ch08-smart-contracts-and-vyper": "Smart Contracts and Vyper",
+        "ch09-smart-contract-security": "Smart Contract Security",
+        "ch11-oracles": "Oracles",
+        "ch12-decentralized-applications": "Decentralized Applications",
+        "ch13-decentralized-finance": "Decentralized Finance",
+        "ch14-the-evm": "The Ethereum Virtual Machine",
       };
       ensureChapter(
         handle.course,

@@ -73,7 +73,7 @@ pub fn courses_dir(app: &tauri::AppHandle) -> anyhow::Result<PathBuf> {
 ///       them removed on next launch. Mirrors the web seeder's V6
 ///       LEGACY_STARTER_IDS prune (Apps/Fishbones/src/data/webSeedCourses.ts)
 ///       so all three platforms drop the same retirees in lockstep.
-const SEED_VERSION: u32 = 7;
+const SEED_VERSION: u32 = 8;
 
 /// Ids that previously shipped via `resources/bundled-packs/` but have
 /// since been retired. On a SEED_VERSION bump, ensure_seed deletes
